@@ -17,12 +17,16 @@ export const COLORS = [
  * Vehículos (solo cambia la apariencia, no el juego).
  *  - glb: nombre del archivo en src/assets/ (si existe se usa; si no, el provisional)
  *  - glbRotationY: ajuste extra si el modelo sale mirando hacia atrás (Math.PI)
+ *  - paint: 'auto' | 'first' | nombre(s) exacto(s) del material a pintar
  *  - build: constructor del modelo provisional
+ *
+ * NOTA TRACTOR: en Blender la carrocería son los materiales "13", "22" y "29".
+ * Se pintan explícitamente esos tres materiales (no por heurística).
  */
 export const VEHICLES = [
-  { id: 'sport', name: 'DEPORTIVO', glb: 'sport.glb', glbRotationY: 0, paint: 'auto', build: buildSport },
-  { id: 'formula', name: 'FÓRMULA 1', glb: 'formula.glb', glbRotationY: 0, paint: 'first', build: buildFormula },
-  { id: 'tractor', name: 'TRACTOR', glb: 'tractor.glb', glbRotationY: 0, paint: 'first', build: buildTractor },
+  { id: 'sport',   name: 'DEPORTIVO',  glb: 'sport.glb',   glbRotationY: 0, paint: 'auto',             build: buildSport },
+  { id: 'formula', name: 'FÓRMULA 1',  glb: 'formula.glb', glbRotationY: 0, paint: 'auto',             build: buildFormula },
+  { id: 'tractor', name: 'TRACTOR',    glb: 'tractor.glb', glbRotationY: 0, paint: ['13'], build: buildTractor },
 ];
 
 // No da error si todavía no hay ningún .glb en src/assets/
@@ -100,8 +104,13 @@ async function buildFromGlb(def, url) {
   };
 }
 
-/** Busca el/los material(es) de la carrocería: por nombre, o el de más triángulos. */
-/** Elige el/los material(es) que cambian de color, según def.paint. */
+/**
+ * Elige el/los material(es) que cambian de color, según def.paint.
+ *  - 'auto'  -> por nombre (BODY_NAME) o el de más triángulos
+ *  - 'first' -> el primer material del modelo
+ *  - string/array -> nombre(s) exacto(s). También acepta sufijos tipo
+ *    "Material.013", "22.001", "29 - Default" haciendo match por sufijo.
+ */
 function findPaintMaterials(root, def) {
   // Map conserva el orden de aparición de los materiales en el modelo
   const triangles = new Map();
@@ -130,8 +139,19 @@ function findPaintMaterials(root, def) {
   }
 
   if (rule !== 'auto') {
-    const wanted = [].concat(rule).map((n) => String(n).toLowerCase());
-    const found = all.filter((m) => wanted.includes(m.name.toLowerCase()));
+    const wanted = [].concat(rule).map((n) => String(n).trim().toLowerCase());
+    const found = all.filter((m) => {
+      const name = (m.name || '').trim().toLowerCase();
+      if (wanted.includes(name)) return true;              // exacto
+      // Sufijo tipo "material.013", "22.001", "29 - default", "13_cuerpo"
+      return wanted.some((w) => {
+        const base = name.replace(/\.\d{3,}$/, '');        // "material"
+        const num = (name.match(/\.(\d{3,})$/) || [])[1];  // "013"
+        if (num && Number(num) === Number(w) && base === 'material') return true;
+        return name === w || name.startsWith(`${w}.`) || name.startsWith(`${w}_`) ||
+               name.startsWith(`${w} `) || name.endsWith(`.${w}`) || name.endsWith(`_${w}`);
+      });
+    });
     if (found.length) {
       info(`se pintan: ${found.map((m) => `"${m.name}"`).join(', ')}.`);
       return found;
