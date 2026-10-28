@@ -20,9 +20,9 @@ export const COLORS = [
  *  - build: constructor del modelo provisional
  */
 export const VEHICLES = [
-  { id: 'sport', name: 'DEPORTIVO', glb: 'sport.glb', glbRotationY: 0, build: buildSport },
-  { id: 'formula', name: 'FÓRMULA 1', glb: 'formula.glb', glbRotationY: 0, build: buildFormula },
-  { id: 'tractor', name: 'TRACTOR', glb: 'tractor.glb', glbRotationY: 0, build: buildTractor },
+  { id: 'sport', name: 'DEPORTIVO', glb: 'sport.glb', glbRotationY: 0, paint: 'auto', build: buildSport },
+  { id: 'formula', name: 'FÓRMULA 1', glb: 'formula.glb', glbRotationY: 0, paint: 'first', build: buildFormula },
+  { id: 'tractor', name: 'TRACTOR', glb: 'tractor.glb', glbRotationY: 0, paint: 'first', build: buildTractor },
 ];
 
 // No da error si todavía no hay ningún .glb en src/assets/
@@ -88,7 +88,7 @@ async function buildFromGlb(def, url) {
     }
   });
 
-  const paintMaterials = findPaintMaterials(root, def.id);
+  const paintMaterials = findPaintMaterials(root, def);
   return {
     object: fitToStage(root, STAGE_LENGTH, def.glbRotationY ?? 0, true),
     paintMaterials,
@@ -101,7 +101,9 @@ async function buildFromGlb(def, url) {
 }
 
 /** Busca el/los material(es) de la carrocería: por nombre, o el de más triángulos. */
-function findPaintMaterials(root, vehicleId) {
+/** Elige el/los material(es) que cambian de color, según def.paint. */
+function findPaintMaterials(root, def) {
+  // Map conserva el orden de aparición de los materiales en el modelo
   const triangles = new Map();
   const count = (mat, n) => triangles.set(mat, (triangles.get(mat) ?? 0) + n);
 
@@ -118,18 +120,35 @@ function findPaintMaterials(root, vehicleId) {
   });
 
   const all = [...triangles.keys()];
-  const named = all.filter((m) => BODY_NAME.test(m.name));
-  if (named.length) return named;
+  const rule = def.paint ?? 'auto';
+  const info = (msg) =>
+    console.info(`[Paint Drive] "${def.id}": ${msg}`, 'Materiales del modelo:', all.map((m) => m.name || '(sin nombre)'));
 
+  if (rule === 'first') {
+    info(`se pinta el primer material: "${all[0]?.name || '(sin nombre)'}".`);
+    return all.slice(0, 1);
+  }
+
+  if (rule !== 'auto') {
+    const wanted = [].concat(rule).map((n) => String(n).toLowerCase());
+    const found = all.filter((m) => wanted.includes(m.name.toLowerCase()));
+    if (found.length) {
+      info(`se pintan: ${found.map((m) => `"${m.name}"`).join(', ')}.`);
+      return found;
+    }
+    info(`no encuentro ningún material llamado ${JSON.stringify(rule)}; se usa el modo automático.`);
+  }
+
+  // Modo automático: material llamado "Body"... o el de más superficie
+  const named = all.filter((m) => BODY_NAME.test(m.name));
+  if (named.length) {
+    info(`se pintan: ${named.map((m) => `"${m.name}"`).join(', ')}.`);
+    return named;
+  }
   const guess = [...triangles.entries()]
     .filter(([m]) => !NOT_BODY.test(m.name))
     .sort((a, b) => b[1] - a[1])[0]?.[0];
-
-  console.info(
-    `[Paint Drive] "${vehicleId}": ningún material se llama "Body". ` +
-      (guess ? `Se pintará "${guess.name || '(sin nombre)'}" (el de más superficie).` : 'No se pudo elegir ninguno.') +
-      ' Materiales:', all.map((m) => m.name),
-  );
+  info(guess ? `se pinta "${guess.name || '(sin nombre)'}" (el de más superficie).` : 'no se pudo elegir ningún material.');
   return guess ? [guess] : [];
 }
 
