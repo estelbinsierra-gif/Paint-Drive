@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#5db4ff" />
+    <title>Paint Drive</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Arena + salpicaduras -->
+      <div class="arena-bg" aria-hidden="true">
+        <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" focusable="false">
+          <defs>
+            <filter id="goo" filterUnits="userSpaceOnUse" x="0" y="0" width="1600" height="900">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
+            </filter>
+          </defs>
+
+          <g class="splat splat-red" filter="url(#goo)">
+            <circle cx="260" cy="640" r="210" />
+            <circle cx="120" cy="520" r="140" />
+            <circle cx="430" cy="700" r="150" />
+            <circle cx="300" cy="820" r="170" />
+            <circle cx="80" cy="760" r="120" />
+            <circle cx="520" cy="560" r="60" />
+            <circle cx="600" cy="760" r="45" />
+            <circle cx="180" cy="380" r="40" />
+            <circle cx="640" cy="640" r="26" />
+            <circle cx="700" cy="850" r="22" />
+            <circle cx="60" cy="330" r="22" />
+            <path class="drip" stroke-width="40" d="M260 760 V 900" />
+            <path class="drip" stroke-width="26" d="M430 780 V 900" />
+          </g>
+
+          <g class="splat splat-blue" filter="url(#goo)">
+            <circle cx="1340" cy="660" r="210" />
+            <circle cx="1480" cy="540" r="140" />
+            <circle cx="1170" cy="720" r="150" />
+            <circle cx="1300" cy="840" r="170" />
+            <circle cx="1520" cy="780" r="120" />
+            <circle cx="1080" cy="590" r="60" />
+            <circle cx="1000" cy="790" r="45" />
+            <circle cx="1420" cy="400" r="40" />
+            <circle cx="960" cy="670" r="26" />
+            <circle cx="900" cy="850" r="22" />
+            <circle cx="1540" cy="350" r="22" />
+            <path class="drip" stroke-width="40" d="M1340 760 V 900" />
+            <path class="drip" stroke-width="26" d="M1170 780 V 900" />
+          </g>
+        </svg>
+      </div>
+
+      <main class="menu">
+        <!-- JUGADOR 1 -->
+        <section class="player player-1" data-player="1" aria-label="Jugador 1">
+          <div class="player-head">
+            <div class="banner">
+              <div class="banner-title">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v4h-2a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H3v-4a1 1 0 0 1 1-1h1zm2.2 0h9.6l-1-3H8.2l-1 3z"/></svg>
+                <span>JUGADOR 1</span>
+              </div>
+              <div class="selector">
+                <button type="button" class="arrow" data-action="vehicle-prev" aria-label="Coche anterior (jugador 1)">‹</button>
+                <div class="selector-label">
+                  <strong class="vehicle-name">DEPORTIVO</strong>
+                  <small>CAMBIAR COCHE</small>
+                </div>
+                <button type="button" class="arrow" data-action="vehicle-next" aria-label="Coche siguiente (jugador 1)">›</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="car-view"><canvas aria-label="Coche del jugador 1"></canvas></div>
+
+          <div class="player-foot">
+            <div class="colors">
+              <div class="colors-row">
+                <button type="button" class="arrow" data-action="color-prev" aria-label="Color anterior (jugador 1)">‹</button>
+                <div class="swatches" role="radiogroup" aria-label="Color del coche del jugador 1"></div>
+                <button type="button" class="arrow" data-action="color-next" aria-label="Color siguiente (jugador 1)">›</button>
+              </div>
+              <small>CAMBIAR COLOR</small>
+            </div>
+          </div>
+        </section>
+
+        <!-- Centro -->
+        <div class="logo-wrap">
+          <h1 class="logo">
+            <span class="logo-paint">Paint</span>
+            <span class="logo-drive">Drive</span>
+          </h1>
+          <p class="tagline">PINTA EL MAPA Y GANA</p>
+        </div>
+
+        <div class="play-wrap">
+          <button id="btn-play" class="btn-play" type="button" aria-label="Jugar">
+            <span class="play-icon"></span>
+          </button>
+          <span class="play-label">JUGAR</span>
+        </div>
+
+        <div class="mode-panel">
+          <p class="mode-title">MODO DE JUEGO</p>
+          <div class="mode-select" role="radiogroup" aria-label="Número de jugadores">
+            <label class="mode mode-1">
+              <input type="radio" name="players" value="1" checked />
+              <span>1 JUGADOR</span>
+            </label>
+            <label class="mode mode-2">
+              <input type="radio" name="players" value="2" />
+              <span>2 JUGADORES</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- JUGADOR 2 -->
+        <section class="player player-2" data-player="2" aria-label="Jugador 2">
+          <div class="player-head">
+            <div class="banner">
+              <div class="banner-title">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v4h-2a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H3v-4a1 1 0 0 1 1-1h1zm2.2 0h9.6l-1-3H8.2l-1 3z"/></svg>
+                <span>JUGADOR 2</span>
+              </div>
+              <div class="selector">
+                <button type="button" class="arrow" data-action="vehicle-prev" aria-label="Coche anterior (jugador 2)">‹</button>
+                <div class="selector-label">
+                  <strong class="vehicle-name">DEPORTIVO</strong>
+                  <small>CAMBIAR COCHE</small>
+                </div>
+                <button type="button" class="arrow" data-action="vehicle-next" aria-label="Coche siguiente (jugador 2)">›</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="car-view"><canvas aria-label="Coche del jugador 2"></canvas></div>
+
+          <div class="player-foot">
+            <div class="colors">
+              <div class="colors-row">
+                <button type="button" class="arrow" data-action="color-prev" aria-label="Color anterior (jugador 2)">‹</button>
+                <div class="swatches" role="radiogroup" aria-label="Color del coche del jugador 2"></div>
+                <button type="button" class="arrow" data-action="color-next" aria-label="Color siguiente (jugador 2)">›</button>
+              </div>
+              <small>CAMBIAR COLOR</small>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

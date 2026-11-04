@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paint Drive — Pinta el mapa y gana</title>
+    <meta name="description" content="Paint Drive: un juego de coches en 3D donde la pintura es tu arma. Pinta el mapa y gana." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --navy: #0b1030;
+            --navy-2: #171a46;
+            --red: #ff2d3f;
+            --blue: #2d6bff;
+            --yellow: #ffd200;
+            --purple: #a23bff;
+            --sky: #5aa9ff;
+            --floor: #dde2ee;
+            --text: #f2f5ff;
+            --muted: #b7c0dc;
+            --display: 'Anton', Impact, 'Arial Black', sans-serif;
+            --label: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+            --body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--body);
+            background: var(--navy);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        a { color: inherit; }
+        :focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+        /* ---------- Logo (mismo estilo que el menú del juego) ---------- */
+        .logo {
+            font-family: var(--display);
+            font-size: 34px;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            transform: skew(-8deg);
+            display: inline-block;
+            text-decoration: none;
+            color: var(--red);
+            -webkit-text-stroke: 1.5px #fff;
+            paint-order: stroke fill;
+            text-shadow: 3px 3px 0 #000;
+        }
+        .logo b { color: var(--blue); font-weight: inherit; }
+
+        /* ---------- Cabecera ---------- */
+        .top {
+            position: absolute; inset: 0 0 auto 0; z-index: 10;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px clamp(16px, 4vw, 48px);
+        }
+        .top nav { display: flex; gap: 8px; align-items: center; }
+        .top nav a:not(.btn-mini) {
+            font-family: var(--label); font-weight: 700; font-size: 18px; letter-spacing: .08em; text-transform: uppercase;
+            text-decoration: none; padding: 8px 14px; border-radius: 8px; text-shadow: 0 2px 6px #0008;
+        }
+        .top nav a:not(.btn-mini):hover { background: #ffffff22; }
+        .btn-mini {
+            font-family: var(--label); font-weight: 800; font-size: 18px; letter-spacing: .08em; text-transform: uppercase;
+            text-decoration: none; padding: 9px 22px; margin-left: 6px;
+            background: linear-gradient(180deg, #ff4b5c, #d81b2c); border: 2px solid #fff; border-radius: 10px;
+            box-shadow: 0 4px 0 #7a0d18, 0 8px 18px #0006;
+            transform: skew(-8deg);
+        }
+        .btn-mini:hover { filter: brightness(1.1); }
+
+        /* ---------- Portada ---------- */
+        .hero {
+            position: relative; min-height: 100svh; display: grid; align-items: center; isolation: isolate;
+            padding: 110px clamp(16px, 6vw, 96px) 120px;
+        }
+        .hero-img {
+            position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 55%; z-index: -2;
+        }
+        .hero::before { /* degradado para que el texto se lea sobre la imagen */
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background:
+                linear-gradient(90deg, rgba(8, 12, 40, .92) 0%, rgba(8, 12, 40, .66) 38%, rgba(8, 12, 40, .08) 72%),
+                linear-gradient(0deg, var(--navy) 0%, rgba(11, 16, 48, 0) 22%);
+        }
+        .hero-in { max-width: 680px; }
+        .tag {
+            display: inline-block; font-family: var(--label); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; font-size: 16px;
+            background: var(--yellow); color: #111; padding: 5px 14px; border-radius: 6px; transform: skew(-8deg); margin-bottom: 18px;
+            box-shadow: 3px 3px 0 #000;
+        }
+        h1 {
+            font-family: var(--display); font-weight: 400; text-transform: uppercase;
+            font-size: clamp(54px, 9.5vw, 128px); line-height: .98; transform: skew(-6deg); transform-origin: left bottom;
+            -webkit-text-stroke: 2px var(--navy); paint-order: stroke fill;
+            text-shadow: 5px 6px 0 #000, 0 0 40px #0008;
+        }
+        h1 .r { color: var(--red); }
+        h1 .b { color: #4f86ff; }
+        .lead {
+            font-size: clamp(17px, 2vw, 21px); line-height: 1.55; color: #e5ebff; margin: 22px 0 34px; max-width: 560px;
+            text-shadow: 0 2px 10px #000a;
+        }
+        .cta-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+
+        .play {
+            --ring: conic-gradient(from 200deg, var(--red), var(--purple), var(--blue), var(--purple), var(--red));
+            display: inline-flex; align-items: center; gap: 14px; text-decoration: none; cursor: pointer;
+            font-family: var(--display); font-size: 28px; letter-spacing: .05em; text-transform: uppercase; color: #fff;
+            padding: 16px 44px 16px 22px; border-radius: 999px; border: 4px solid transparent;
+            background: linear-gradient(var(--navy-2), var(--navy)) padding-box, var(--ring) border-box;
+            box-shadow: 0 0 0 3px #fff3, 0 10px 40px #a23bff88;
+            transition: transform .15s, box-shadow .15s;
+        }
+        .play i {
+            width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--navy-2); font-style: normal; font-size: 20px; padding-left: 4px;
+        }
+        .play:hover { transform: scale(1.05) translateY(-2px); box-shadow: 0 0 0 3px #fff5, 0 14px 50px #ff2d3f99; }
+        .ghost {
+            font-family: var(--label); font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase; text-decoration: none;
+            padding: 14px 22px; border-radius: 12px; border: 2px solid #ffffff88; background: #0b103066; backdrop-filter: blur(4px);
+        }
+        .ghost:hover { background: #ffffff22; border-color: #fff; }
+        .scroll {
+            position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); font-family: var(--label); font-weight: 700;
+            letter-spacing: .2em; text-transform: uppercase; font-size: 13px; color: #fff; opacity: .8; text-decoration: none; text-align: center;
+        }
+        .scroll::after { content: "⌄"; display: block; font-size: 26px; line-height: 1; animation: bob 1.6s ease-in-out infinite; }
+        @keyframes bob { 50% { transform: translateY(6px); } }
+
+        /* ---------- Secciones ---------- */
+        section.block { position: relative; padding: clamp(60px, 9vw, 110px) clamp(16px, 5vw, 64px); overflow: hidden; }
+        .head { text-align: center; margin-bottom: 48px; position: relative; z-index: 1; }
+        .head h2 {
+            font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(38px, 6vw, 68px); line-height: 1;
+            transform: skew(-6deg); -webkit-text-stroke: 1.5px var(--navy); paint-order: stroke fill; text-shadow: 4px 4px 0 #000;
+        }
+        .head p { margin-top: 14px; font-size: 18px; }
+
+        /* Modos: suelo claro con manchas, como el menú del juego */
+        #modos {
+            background:
+                linear-gradient(var(--sky) 0, #9fd0ff 120px, var(--floor) 121px) ;
+        }
+        #modos::before { /* rejilla del suelo */
+            content: ""; position: absolute; inset: 120px 0 0 0;
+            background-image: linear-gradient(#0b103016 1px, transparent 1px), linear-gradient(90deg, #0b103016 1px, transparent 1px);
+            background-size: 64px 64px;
+        }
+        #modos .head h2 { color: #fff; }
+        #modos .head p { color: var(--navy); font-weight: 600; }
+        .splat { position: absolute; z-index: 0; pointer-events: none; }
+        .splat.l { left: -140px; bottom: -80px; width: min(620px, 70vw); fill: var(--red); }
+        .splat.r { right: -140px; top: 120px; width: min(560px, 64vw); fill: var(--blue); }
+
+        .modes { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 34px; }
+        .mode {
+            --c: var(--red);
+            position: relative; padding: 30px 32px 34px; color: var(--text);
+            background: linear-gradient(160deg, var(--navy-2), var(--navy));
+            border: 4px solid var(--c); border-radius: 6px;
+            clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px));
+            box-shadow: 0 0 0 4px #0001; transition: transform .2s;
+        }
+        .mode:hover { transform: translateY(-6px); }
+        .mode.coop { --c: var(--blue); }
+        .mode .ico {
+            font-family: var(--label); font-weight: 800; font-size: 15px; letter-spacing: .14em; text-transform: uppercase;
+            color: #fff; background: var(--c); display: inline-block; padding: 3px 12px; border-radius: 4px; transform: skew(-8deg); margin-bottom: 12px;
+        }
+        .mode h3 { font-family: var(--display); font-weight: 400; font-size: 34px; text-transform: uppercase; letter-spacing: .02em; margin-bottom: 14px; }
+        .mode p { color: var(--muted); line-height: 1.6; font-size: 17px; }
+        .mode p + p { margin-top: 12px; }
+        .mode strong { color: #fff; }
+        .mode em { color: #fff; font-style: normal; font-weight: 700; }
+        .keys { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 20px; }
+        .keys div { font-family: var(--label); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 14px; color: var(--muted); }
+        kbd {
+            display: inline-block; min-width: 30px; padding: 3px 8px; margin: 0 2px 0 0; text-align: center; font: 800 15px var(--label); color: var(--navy);
+            background: #fff; border-radius: 6px; box-shadow: 0 3px 0 #9aa3c5;
+        }
+
+        /* Potenciadores */
+        #potenciadores {
+            background: radial-gradient(ellipse at 50% 0, #26308a 0, transparent 60%), var(--navy);
+        }
+        .power { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px; }
+        .pw {
+            --c: var(--blue); position: relative; text-align: center; padding: 34px 24px 30px; border-radius: 22px;
+            background: linear-gradient(180deg, #ffffff10, #ffffff05); border: 2px solid #ffffff22; overflow: hidden;
+            transition: transform .2s, border-color .2s, box-shadow .2s;
+        }
+        .pw:hover { transform: translateY(-6px); border-color: var(--c); box-shadow: 0 14px 40px color-mix(in srgb, var(--c) 45%, transparent); }
+        .pw::before { content: ""; position: absolute; inset: -40% -20% auto; height: 80%; background: radial-gradient(circle, color-mix(in srgb, var(--c) 55%, transparent), transparent 65%); z-index: 0; }
+        .pw > * { position: relative; }
+        .orb {
+            --img: none;
+            width: 150px; height: 150px; margin: 0 auto 14px; border-radius: 50%;
+            /* las imágenes son hojas 2x2: se recorta el cuarto inferior izquierdo y solo se ve el círculo */
+            background: var(--img) 9% 86% / 262% 262% no-repeat, #05061a;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 70%, #fff), 0 10px 36px color-mix(in srgb, var(--c) 65%, transparent);
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float { 50% { transform: translateY(-8px) rotate(6deg); } }
+        .pw h3 { font-family: var(--display); font-weight: 400; font-size: 28px; text-transform: uppercase; letter-spacing: .02em; }
+        .pw p { color: var(--muted); margin-top: 8px; line-height: 1.5; }
+        .pw.spd { --c: #1fa2ff; }
+        .pw.big { --c: var(--red); }
+        .pw.col { --c: var(--purple); }
+
+        /* Cierre */
+        .final { text-align: center; background: linear-gradient(180deg, var(--navy), #1b1f5c); padding: 80px 16px 70px; }
+        .final h2 { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(36px, 6vw, 64px); transform: skew(-6deg); margin-bottom: 28px; text-shadow: 4px 4px 0 #000; }
+        footer { padding: 22px 16px; text-align: center; font-size: 14px; color: var(--muted); background: #070a22; }
+
+        @media (max-width: 760px) {
+            .top nav a:not(.btn-mini) { display: none; }
+            .logo { font-size: 28px; }
+            .hero { align-items: end; padding-top: 90px; }
+            .hero::before { background: linear-gradient(0deg, rgba(8, 12, 40, .95) 0%, rgba(8, 12, 40, .7) 48%, rgba(8, 12, 40, .1) 100%); }
+            .hero-img { object-position: 40% 40%; }
+            .play { font-size: 24px; }
+            .scroll { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .orb, .scroll::after { animation: none; }
+            .mode, .pw, .play { transition: none; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="top">
+        <a class="logo" href="#" aria-label="Paint Drive">Paint <b>Drive</b></a>
+        <nav>
+            <a href="#modos">Modos</a>
+            <a href="#potenciadores">Potenciadores</a>
+            <a class="btn-mini" href="/menu.html">Jugar</a>
+        </nav>
+    </header>
+
+    <!-- PORTADA -->
+    <section class="hero">
+        <img class="hero-img" src="/portada.jpg" alt="Un deportivo azul, un tractor verde y un Fórmula 1 rojo pintando el suelo con salpicaduras de colores" fetchpriority="high" />
+        <div class="hero-in">
+            <span class="tag">Juego de coches 3D</span>
+            <h1>Pinta el mapa<br><span class="r">y</span> <span class="b">gana</span></h1>
+            <p class="lead">
+                Elige tu vehículo, personaliza su color y compite por cubrir la mayor parte del escenario.
+                En Paint Drive, la pintura es tu arma.
+            </p>
+            <div class="cta-row">
+                <a class="play" href="/menu.html"><i>▶</i> ¡Al menú principal!</a>
+                <a class="ghost" href="#modos">Ver modos de juego</a>
+            </div>
+        </div>
+        <a class="scroll" href="#modos">Descubre más</a>
+    </section>
+
+    <!-- MODOS -->
+    <section class="block" id="modos">
+        <svg class="splat l" viewBox="0 0 600 500" aria-hidden="true"><path d="M60 250c-30-90 40-170 130-170 40-60 140-70 190-10 90-20 160 40 150 120 60 40 60 120 0 150-10 70-90 100-150 70-40 60-140 60-180 0-80 20-150-30-140-110-40-10-30-40 0-50z"/><circle cx="500" cy="90" r="28"/><circle cx="560" cy="170" r="14"/></svg>
+        <svg class="splat r" viewBox="0 0 600 500" aria-hidden="true"><path d="M540 250c30-90-40-170-130-170-40-60-140-70-190-10-90-20-160 40-150 120-60 40-60 120 0 150 10 70 90 100 150 70 40 60 140 60 180 0 80 20 150-30 140-110 40-10 30-40 0-50z"/><circle cx="90" cy="410" r="30"/><circle cx="40" cy="330" r="14"/></svg>
+
+        <div class="head">
+            <h2>Elige tu modo</h2>
+            <p>Dos formas de ensuciar el escenario.</p>
+        </div>
+
+        <div class="modes">
+            <article class="mode pvp">
+                <span class="ico">Versus</span>
+                <h3>Modo 2 jugadores</h3>
+                <p>
+                    Compite cara a cara. Tendréis que <strong>pintar la mayor cantidad de espacio en blanco</strong> posible.
+                    ¡Al final del tiempo, gana quien haya pintado más!
+                </p>
+                <p>
+                    <em>¡Ojo con los potenciadores!</em> Aparecerán al azar por el mapa para darte más velocidad,
+                    hacer tu coche gigante o provocar una explosión de colores que pintará media pista.
+                </p>
+                <div class="keys">
+                    <div>J1 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
+                    <div>J2 <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></div>
+                </div>
+            </article>
+
+            <article class="mode coop">
+                <span class="ico">Cooperativo</span>
+                <h3>Modo 1 jugador</h3>
+                <p>
+                    Un solo coche, <strong>dos personas a los mandos</strong>. Uno controla el volante
+                    (izquierda/derecha) y el otro el acelerador y el freno (avanzar/retroceder).
+                </p>
+                <p>
+                    <em>¡Comunicación extrema!</em> Recoged todos los puntos de colores que aparecen alrededor del
+                    escenario pasando por encima de ellos.
+                </p>
+                <div class="keys">
+                    <div>Volante <kbd>A</kbd><kbd>D</kbd></div>
+                    <div>Pedales <kbd>↑</kbd><kbd>↓</kbd></div>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- POTENCIADORES -->
+    <section class="block" id="potenciadores">
+        <div class="head">
+            <h2>Potenciadores</h2>
+            <p style="color:var(--muted)">Aparecen al azar por el mapa. ¡Corre a por ellos!</p>
+        </div>
+        <div class="power">
+            <article class="pw spd">
+                <div class="orb" style="--img:url(/potenciador-velocidad.png)" role="img" aria-label="Icono de velocidad"></div>
+                <h3>Velocidad</h3>
+                <p>Tu coche va más rápido durante unos segundos: ¡pinta más en menos tiempo!</p>
+            </article>
+            <article class="pw big">
+                <div class="orb" style="--img:url(/potenciador-grande.png)" role="img" aria-label="Icono de coche grande"></div>
+                <h3>Coche grande</h3>
+                <p>Tu coche crece y deja una huella de pintura mucho más ancha.</p>
+            </article>
+            <article class="pw col">
+                <div class="orb" style="--img:url(/potenciador-color.png)" role="img" aria-label="Icono de explosión de colores"></div>
+                <h3>Explosión de colores</h3>
+                <p>Pinta de golpe una gran parte del mapa con tu color.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="final">
+        <h2>¿Listo para ensuciar el mapa?</h2>
+        <a class="play" href="/menu.html"><i>▶</i> ¡Al menú principal!</a>
+    </section>
+
+    <footer>Paint Drive · Pinta el mapa y gana</footer>
+
+</body>
+
+</html>
