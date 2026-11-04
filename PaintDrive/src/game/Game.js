@@ -9,7 +9,7 @@ import { Car } from './Car.js';
 import { PowerUpField, CoinField, POWERUP_INFO } from './Pickups.js';
 import { Particles } from './Effects.js';
 import { Hud } from './Hud.js';
-import { Keyboard } from './input.js';
+import { Keyboard, readPad } from './input.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -48,6 +48,11 @@ export class Game {
 
     this.keys = new Keyboard();
     this._onKey = (e) => {
+      if (e.code === 'F3') {
+        e.preventDefault();
+        this.toggleDiag();
+        return;
+      }
       if (e.repeat || !KEYS.pause.includes(e.code)) return;
       this.togglePause();
     };
@@ -72,6 +77,28 @@ export class Game {
         buttons: [{ text: 'Volver al menú', primary: true, onClick: () => this.exit() }],
       });
     });
+  }
+
+  /** F3: muestra qué teclas llegan al navegador (para descubrir si el teclado "se come" alguna). */
+  toggleDiag() {
+    if (this.diag) {
+      clearInterval(this.diagTimer);
+      this.diag.remove();
+      this.diag = null;
+      return;
+    }
+    this.diag = document.createElement('pre');
+    this.diag.style.cssText =
+      'position:fixed;left:8px;bottom:8px;z-index:50;margin:0;padding:8px 10px;background:#000a;color:#9f9;font:12px monospace;border-radius:6px;pointer-events:none';
+    this.root.append(this.diag);
+    this.diagTimer = setInterval(() => {
+      if (!this.diag) return;
+      const c = this.cars.map((car, i) => {
+        const k = this.controls(i);
+        return `J${i + 1}: gas ${k.throttle}  giro ${k.steer}  vel ${car.speed.toFixed(1)}`;
+      });
+      this.diag.textContent = `Teclas: ${[...this.keys.down].join(' ') || '—'}\n${c.join('\n')}`;
+    }, 80);
   }
 
   /* ------------------------------------------------------------------ */
@@ -172,7 +199,12 @@ export class Game {
   /** Vista de águila fija: aleja la cámara hasta que el mapa entero cabe en pantalla. */
   fitCamera() {
     if (!this.map) return;
-    const { cx, cz, sx, sz } = this.map.bounds;
+    const pl = this.nav.play;
+    const m = MAP.cameraMargin ?? 1.5;
+    const cx = pl.cx;
+    const cz = pl.cz;
+    const sx = pl.sx + m * 2;
+    const sz = pl.sz + m * 2;
     const cam = this.camera;
     const tilt = THREE.MathUtils.degToRad(CAMERA.tiltDeg);
     const target = new THREE.Vector3(cx, 0, cz);
@@ -257,9 +289,19 @@ export class Game {
 
   controls(idx) {
     const k = this.keys;
+    const clamp = (v) => Math.max(-1, Math.min(1, v));
     if (this.mode === 'versus') {
       const m = idx === 0 ? KEYS.p1 : KEYS.p2;
-      return { throttle: k.axis(m.down, m.up), steer: k.axis(m.right, m.left) };
+      const alt = idx === 1 ? KEYS.alt?.p2 : null;
+      // Cada jugador lee SOLO sus propias teclas (y su mando): no se mezclan entre sí.
+      let throttle = alt ? k.axis2([m.down, alt.down], [m.up, alt.up]) : k.axis(m.down, m.up);
+      let steer = alt ? k.axis2([m.right, alt.right], [m.left, alt.left]) : k.axis(m.right, m.left);
+      const pad = readPad(idx);
+      if (pad) {
+        steer = clamp(steer + pad.steer);
+        throttle = clamp(throttle + pad.throttle);
+      }
+      return { throttle, steer };
     }
     // cooperativo: J1 = dirección (A/D), J2 = acelerar / frenar (↑/↓)
     return { throttle: k.axis(KEYS.p2.down, KEYS.p2.up), steer: k.axis(KEYS.p1.right, KEYS.p1.left) };
@@ -275,8 +317,14 @@ export class Game {
     }
 
     // coches
-    this.cars.forEach((car, i) => car.update(dt, this.controls(i), this.nav));
-    this.collideCars();
+    // varios pasos pequeños: no se atraviesan muros ni coches aunque el ordenador vaya lento
+    const steps = Math.max(1, Math.ceil(dt / 0.0167));
+    const sub = dt / steps;
+    const ctrls = this.cars.map((_, i) => this.controls(i));
+    for (let s = 0; s < steps; s++) {
+      this.cars.forEach((car, i) => car.update(sub, ctrls[i], this.nav));
+      this.collideCars();
+    }
 
     this.hintTimer -= dt;
     if (this.hintTimer <= 0) this.hud.hideHint();
@@ -311,28 +359,64 @@ export class Game {
     }
   }
 
+  /** Choque coche-coche: cada coche son 3 círculos a lo largo (cápsula), con masa, rebote y empujón. */
   collideCars() {
     if (this.cars.length < 2) return;
     const [a, b] = this.cars;
-    let dx = b.x - a.x;
-    let dz = b.z - a.z;
-    let d = Math.hypot(dx, dz);
-    const min = a.bodyRadius + b.bodyRadius;
-    if (d >= min) return;
-    if (d < 1e-4) {
-      dx = 1;
-      dz = 0;
-      d = 1;
+    const pts = (c) => {
+      const f = c.forward;
+      const L = CAR.length * c.size;
+      return [-0.3, 0, 0.3].map((t) => ({ x: c.x + f.x * L * t, z: c.z + f.z * L * t }));
+    };
+    const ra = CAR.length * 0.2 * a.size;
+    const rb = CAR.length * 0.2 * b.size;
+    const ma = a.size * a.size;
+    const mb = b.size * b.size;
+
+    let hit = false;
+    for (let pass = 0; pass < 3; pass++) {
+      const A = pts(a);
+      const B = pts(b);
+      let best = null;
+      for (const p of A) {
+        for (const q of B) {
+          const dx = q.x - p.x;
+          const dz = q.z - p.z;
+          const d = Math.hypot(dx, dz);
+          const pen = ra + rb - d;
+          if (pen > 0 && (!best || pen > best.pen)) best = { pen, nx: d > 1e-4 ? dx / d : 1, nz: d > 1e-4 ? dz / d : 0 };
+        }
+      }
+      if (!best) break;
+      hit = true;
+      const { pen, nx, nz } = best;
+      // el coche más ligero se mueve más
+      a.x -= nx * pen * (mb / (ma + mb));
+      a.z -= nz * pen * (mb / (ma + mb));
+      b.x += nx * pen * (ma / (ma + mb));
+      b.z += nz * pen * (ma / (ma + mb));
+      if (pass === 0) {
+        const va = { x: a.forward.x * a.speed + a.kx, z: a.forward.z * a.speed + a.kz };
+        const vb = { x: b.forward.x * b.speed + b.kx, z: b.forward.z * b.speed + b.kz };
+        const vn = (vb.x - va.x) * nx + (vb.z - va.z) * nz;
+        if (vn < 0) {
+          const j = (-(1 + CAR.knockback) * vn) / (1 / ma + 1 / mb);
+          a.kx -= (j / ma) * nx;
+          a.kz -= (j / ma) * nz;
+          b.kx += (j / mb) * nx;
+          b.kz += (j / mb) * nz;
+          // se frenan algo: la parte de velocidad que choca de frente
+          const fa = a.forward.x * nx + a.forward.z * nz;
+          const fb = b.forward.x * nx + b.forward.z * nz;
+          if (fa * a.speed > 0) a.speed *= 1 - Math.min(0.6, Math.abs(fa) * 0.5);
+          if (fb * b.speed < 0) b.speed *= 1 - Math.min(0.6, Math.abs(fb) * 0.5);
+        }
+      }
     }
-    const nx = dx / d;
-    const nz = dz / d;
-    const push = (min - d) / 2;
-    a.x -= nx * push;
-    a.z -= nz * push;
-    b.x += nx * push;
-    b.z += nz * push;
-    a.speed *= 0.92;
-    b.speed *= 0.92;
+    if (hit) {
+      a.collideWalls(this.nav); // que el empujón no meta a nadie dentro de un muro
+      b.collideWalls(this.nav);
+    }
   }
 
   /** Deja la huella de pintura del coche (rellenando el hueco entre dos frames). */
@@ -456,6 +540,8 @@ export class Game {
     window.removeEventListener('keydown', this._onKey);
     window.removeEventListener('resize', this._onResize);
     this.keys.dispose();
+    clearInterval(this.diagTimer);
+    this.diag?.remove();
     this.cars.forEach((c) => c.dispose());
     this.powerups?.dispose();
     this.coins?.dispose();

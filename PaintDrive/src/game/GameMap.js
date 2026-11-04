@@ -67,8 +67,48 @@ export async function loadGameMap(renderer, fileName, opts) {
   const h = Math.max(8, Math.ceil(sz / cell));
   const geo = { x0: box.min.x, z0: box.min.z, cell, w, h };
 
+  // Objetos que son "exterior" (césped...) y no cuentan como suelo jugable:
+  //  1) por su nombre en Blender (MAP.outsideNames),
+  //  2) y si no hay ninguno con ese nombre, se detecta solo: un plano grande que contiene a otro plano
+  //     más pequeño (la pista) es el césped de alrededor.
+  const outside = new Set();
+  const hints = (opts.outsideNames ?? []).map((t) => t.toLowerCase());
+  const looksOutside = (o) => {
+    const names = [o.name, ...(Array.isArray(o.material) ? o.material : [o.material]).map((m) => m?.name)];
+    for (let p = o.parent; p && p !== root; p = p.parent) names.push(p.name);
+    return names.some((n) => n && hints.some((t) => n.toLowerCase().includes(t)));
+  };
+  if (hints.length) root.traverse((o) => o.isMesh && looksOutside(o) && outside.add(o));
+  if (!outside.size) detectOutsidePlane(root, sx, sz).forEach((o) => outside.add(o));
+
+  // La pista = caja que ocupa todo lo que NO es exterior (los obstáculos están dentro del suelo)
+  const play = new THREE.Box3();
+  root.traverse((o) => {
+    if (o.isMesh && !outside.has(o)) play.expandByObject(o);
+  });
+
+  outside.forEach((o) => (o.visible = false));
   const { hit, heights } = bakeHeightMap(renderer, root, geo, box.min.y, box.max.y);
-  const nav = new NavGrid(geo, hit, heights, { obstacleHeight: opts.obstacleHeight, holeDepth: opts.holeDepth });
+  outside.forEach((o) => (o.visible = true));
+
+  // Todo lo que queda fuera de la pista (y una franja pegada al muro) cuenta como pared.
+  // Así los coches nunca llegan al muro ni al césped, aunque el muro sea una pared sin grosor.
+  if (!play.isEmpty() && outside.size) {
+    const inset = opts.wallInset ?? 0.5;
+    const px0 = play.min.x + inset, px1 = play.max.x - inset, pz0 = play.min.z + inset, pz1 = play.max.z - inset;
+    for (let j = 0; j < h; j++) {
+      const z = geo.z0 + (j + 0.5) * cell;
+      for (let i = 0; i < w; i++) {
+        const x = geo.x0 + (i + 0.5) * cell;
+        if (x < px0 || x > px1 || z < pz0 || z > pz1) hit[j * w + i] = 0;
+      }
+    }
+  }
+  const nav = new NavGrid(geo, hit, heights, {
+    obstacleHeight: opts.obstacleHeight,
+    wallHeight: opts.wallHeight,
+    holeDepth: opts.holeDepth,
+  });
 
   // El suelo pasa a estar en y = 0
   root.position.y -= nav.groundY;
@@ -78,7 +118,8 @@ export async function loadGameMap(renderer, fileName, opts) {
   console.info(
     `[Paint Drive] Mapa "${fileName}"${usedFallback ? ' (provisional)' : ''}: tamaño original ` +
       `${size.x.toFixed(1)} x ${size.y.toFixed(1)} x ${size.z.toFixed(1)}, escala x${k.toFixed(3)}, rejilla ${w}x${h}, ` +
-      `suelo a y=${nav.groundY.toFixed(2)}, zona libre ${freePct}%`,
+      `suelo a y=${nav.groundY.toFixed(2)}, zona libre ${freePct}%, exterior sellado ${nav.sealedOutside} celdas, ` +
+      `objetos 'exterior' ocultos: ${outside.size}, pista ${nav.play.sx.toFixed(1)} x ${nav.play.sz.toFixed(1)}`,
   );
   if (freePct < 15) {
     console.warn(
@@ -96,6 +137,7 @@ export async function loadGameMap(renderer, fileName, opts) {
     sz: h * cell,
     cx: geo.x0 + (w * cell) / 2,
     cz: geo.z0 + (h * cell) / 2,
+    play: nav.play, // caja de la pista (sin el césped de alrededor)
   };
 
   return {
@@ -110,6 +152,33 @@ export async function loadGameMap(renderer, fileName, opts) {
       });
     },
   };
+}
+
+/**
+ * Detecta el plano de césped sin depender de cómo se llame: entre los objetos planos y grandes,
+ * si el más grande contiene a otro de tamaño parecido, el más grande es el exterior.
+ */
+function detectOutsidePlane(root, sx, sz) {
+  const flats = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const b = new THREE.Box3().setFromObject(o);
+    const s = b.getSize(new THREE.Vector3());
+    const wide = Math.max(s.x, s.z);
+    if (wide < Math.max(sx, sz) * 0.25 || s.y > wide * 0.15) return; // pequeño o alto: no es un plano de suelo
+    flats.push({ o, b, area: s.x * s.z });
+  });
+  flats.sort((a, c) => c.area - a.area);
+  const big = flats[0];
+  if (!big) return [];
+  const tol = Math.max(sx, sz) * 0.01;
+  const inside = flats.slice(1).some(
+    (f) =>
+      f.area >= big.area * 0.2 && f.area < big.area * 0.98 &&
+      f.b.min.x >= big.b.min.x - tol && f.b.max.x <= big.b.max.x + tol &&
+      f.b.min.z >= big.b.min.z - tol && f.b.max.z <= big.b.max.z + tol,
+  );
+  return inside ? [big.o] : [];
 }
 
 /**

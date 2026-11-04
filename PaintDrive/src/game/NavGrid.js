@@ -61,11 +61,11 @@ function edt(feature, w, h) {
 }
 
 /** Altura del "suelo": la más frecuente (si hay varias, la más baja de las importantes). */
-function findGroundHeight(hit, heights) {
+function findGroundHeight(hit, heights, mask) {
   let min = Infinity;
   let max = -Infinity;
   for (let i = 0; i < hit.length; i++) {
-    if (!hit[i]) continue;
+    if (!hit[i] || (mask && !mask[i])) continue;
     if (heights[i] < min) min = heights[i];
     if (heights[i] > max) max = heights[i];
   }
@@ -74,7 +74,7 @@ function findGroundHeight(hit, heights) {
   const range = max - min || 1;
   const hist = new Uint32Array(bins);
   for (let i = 0; i < hit.length; i++) {
-    if (!hit[i]) continue;
+    if (!hit[i] || (mask && !mask[i])) continue;
     hist[Math.min(bins - 1, Math.floor(((heights[i] - min) / range) * bins))]++;
   }
   let top = 0;
@@ -90,7 +90,7 @@ function findGroundHeight(hit, heights) {
   let sum = 0;
   let cnt = 0;
   for (let i = 0; i < hit.length; i++) {
-    if (!hit[i]) continue;
+    if (!hit[i] || (mask && !mask[i])) continue;
     const b = Math.min(bins - 1, Math.floor(((heights[i] - min) / range) * bins));
     if (Math.abs(b - pick) <= 1) {
       sum += heights[i];
@@ -116,7 +116,13 @@ export class NavGrid {
     const { w, h, cell } = this;
     const n = w * h;
 
-    this.groundY = findGroundHeight(hit, heights);
+    // El suelo de referencia se mide solo en la zona central (la pista), no en el césped de alrededor.
+    const centerMask = new Uint8Array(n);
+    for (let j = Math.floor(h * 0.25); j < Math.ceil(h * 0.75); j++) {
+      for (let i = Math.floor(w * 0.25); i < Math.ceil(w * 0.75); i++) centerMask[j * w + i] = 1;
+    }
+    this.groundY = findGroundHeight(hit, heights, centerMask);
+    const wallH = Math.min(opts.obstacleHeight, opts.wallHeight ?? opts.obstacleHeight);
 
     // altura relativa al suelo + celdas bloqueadas
     this.rel = new Float32Array(n);
@@ -128,7 +134,7 @@ export class NavGrid {
       }
       const r = heights[i] - this.groundY;
       this.rel[i] = r;
-      if (r > opts.obstacleHeight || r < -opts.holeDepth) blocked[i] = 1;
+      if (r > wallH || r < -opts.holeDepth) blocked[i] = 1;
     }
 
     // quitar motas sueltas (grietas entre piezas, píxeles aislados)
@@ -152,7 +158,10 @@ export class NavGrid {
       blocked[j * w] = 1;
       blocked[j * w + w - 1] = 1;
     }
+    // Zona jugable = lo que se alcanza desde el centro sin cruzar un muro. Todo lo demás (césped, exterior) se bloquea.
+    this.sealedOutside = this._floodFill(blocked);
     this.blocked = blocked;
+    this._computePlay();
 
     // celdas pintables y cuántas hay
     this.paintable = new Uint8Array(n);
@@ -182,6 +191,85 @@ export class NavGrid {
     }
     this._ptsCache = new Map();
     this._grad = { x: 0, z: 0 };
+  }
+
+  /** Deja libre solo la región conexa que contiene (o rodea) el centro. Devuelve cuántas celdas se bloquearon. */
+  _floodFill(blocked) {
+    const { w, h } = this;
+    const n = w * h;
+    // semilla: celda libre más cercana al centro (en espiral)
+    let seed = -1;
+    const cx = w >> 1;
+    const cy = h >> 1;
+    for (let r = 0; r < Math.max(w, h) / 2 && seed < 0; r++) {
+      for (let dj = -r; dj <= r && seed < 0; dj++) {
+        for (let di = -r; di <= r; di++) {
+          if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+          const i = cx + di;
+          const j = cy + dj;
+          if (i < 1 || j < 1 || i >= w - 1 || j >= h - 1) continue;
+          if (!blocked[j * w + i]) {
+            seed = j * w + i;
+            break;
+          }
+        }
+      }
+    }
+    if (seed < 0) return 0;
+    const seen = new Uint8Array(n);
+    const stack = new Int32Array(n);
+    let sp = 0;
+    stack[sp++] = seed;
+    seen[seed] = 1;
+    let reached = 0;
+    while (sp) {
+      const k = stack[--sp];
+      reached++;
+      const i = k % w;
+      const j = (k / w) | 0;
+      if (i > 0 && !seen[k - 1] && !blocked[k - 1]) { seen[k - 1] = 1; stack[sp++] = k - 1; }
+      if (i < w - 1 && !seen[k + 1] && !blocked[k + 1]) { seen[k + 1] = 1; stack[sp++] = k + 1; }
+      if (j > 0 && !seen[k - w] && !blocked[k - w]) { seen[k - w] = 1; stack[sp++] = k - w; }
+      if (j < h - 1 && !seen[k + w] && !blocked[k + w]) { seen[k + w] = 1; stack[sp++] = k + w; }
+    }
+    let totalFree = 0;
+    for (let i = 0; i < n; i++) if (!blocked[i]) totalFree++;
+    // si la región alcanzada es diminuta, la semilla cayó en un hueco raro: no tocamos nada
+    if (reached < totalFree * 0.15) return 0;
+    let sealed = 0;
+    for (let i = 0; i < n; i++) {
+      if (!blocked[i] && !seen[i]) {
+        blocked[i] = 1;
+        sealed++;
+      }
+    }
+    return sealed;
+  }
+
+  /** Caja (en mundo) que ocupa la zona jugable. */
+  _computePlay() {
+    const { w, h, cell, blocked } = this;
+    let i0 = w, i1 = -1, j0 = h, j1 = -1;
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        if (blocked[j * w + i]) continue;
+        if (i < i0) i0 = i;
+        if (i > i1) i1 = i;
+        if (j < j0) j0 = j;
+        if (j > j1) j1 = j;
+      }
+    }
+    if (i1 < 0) { i0 = 0; i1 = w - 1; j0 = 0; j1 = h - 1; }
+    this.play = {
+      x0: this.x0 + i0 * cell,
+      x1: this.x0 + (i1 + 1) * cell,
+      z0: this.z0 + j0 * cell,
+      z1: this.z0 + (j1 + 1) * cell,
+    };
+    this.play.cx = (this.play.x0 + this.play.x1) / 2;
+    this.play.cz = (this.play.z0 + this.play.z1) / 2;
+    this.play.sx = this.play.x1 - this.play.x0;
+    this.play.sz = this.play.z1 - this.play.z0;
   }
 
   get width() {
@@ -220,8 +308,8 @@ export class NavGrid {
     const l = Math.hypot(gx, gz);
     if (l < 1e-6) {
       // sin información (fuera de la rejilla): empuja hacia el centro
-      gx = this.x0 + this.width / 2 - x;
-      gz = this.z0 + this.depth / 2 - z;
+      gx = this.play.cx - x;
+      gz = this.play.cz - z;
       const l2 = Math.hypot(gx, gz) || 1;
       this._grad.x = gx / l2;
       this._grad.z = gz / l2;
@@ -273,7 +361,7 @@ export class NavGrid {
 
   /** Centro del mapa (útil para empujar coches atascados hacia una zona segura). */
   center() {
-    return { x: this.x0 + this.width / 2, z: this.z0 + this.depth / 2 };
+    return { x: this.play.cx, z: this.play.cz };
   }
 
   /**
@@ -283,10 +371,10 @@ export class NavGrid {
    * Si el objeto tiene `.speed`, se le aplica un rebote suave al chocar con el borde.
    */
   clampToBounds(obj, margin = 0) {
-    const minX = this.x0 + margin;
-    const maxX = this.x0 + this.width - margin;
-    const minZ = this.z0 + margin;
-    const maxZ = this.z0 + this.depth - margin;
+    const minX = this.play.x0 + margin;
+    const maxX = this.play.x1 - margin;
+    const minZ = this.play.z0 + margin;
+    const maxZ = this.play.z1 - margin;
     const hasSpeed = typeof obj.speed === 'number';
     if (obj.x < minX) {
       obj.x = minX;

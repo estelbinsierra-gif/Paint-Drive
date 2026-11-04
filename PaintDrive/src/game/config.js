@@ -25,6 +25,10 @@ export const MAP = {
   size: 60,            // el lado largo del mapa se escala a estas unidades (así el coche siempre cabe bien)
   grid: 512,           // resolución de la rejilla de colisiones/pintura (celdas en el lado largo)
   obstacleHeight: 0.45, // lo que sobresalga más que esto del suelo cuenta como obstáculo
+  wallHeight: 0.14,     // muros BAJOS: lo que sobresalga más que esto ya bloquea (así el muro blanco bajo frena a los coches)
+  // Si en Blender el césped tiene un nombre (objeto o material) que contenga alguna de estas palabras, se ignora como suelo.
+  outsideNames: ['grass', 'cesped', 'césped', 'hierba', 'pasto', 'outside', 'exterior', 'terrain'],
+  cameraMargin: 1.5,    // metros extra alrededor de la pista al encuadrar la cámara
   holeDepth: 0.8,       // lo que esté más hundido que esto cuenta como agujero (no se puede entrar)
   paintScale: 2,        // píxeles de canvas por celda de rejilla (2 -> canvas de ~1024 px)
 };
@@ -43,6 +47,10 @@ export const CAR = {
   bodyRadius: 0.42,   
   wallRadius: 0.36,   // <-- Si ves que chocan muy pronto con las paredes al hacerlos grandes, baja esto a 0.32
   wallOffset: 0.24,   
+  steerRise: 7,       // lo rápido que el volante llega al giro pedido
+  steerReturn: 15,    // lo rápido que vuelve al centro / cambia de lado (giros izq-der rápidos)
+  steerHighSpeed: 0.4,// a máxima velocidad gira un 40% menos (más estable)
+  knockback: 0.55,    // rebote al chocar contra otro coche
 };
 
 /* ---------------- Potenciadores (modo 2 jugadores) ---------------- */
@@ -90,5 +98,7 @@ export const CAMERA = {
 export const KEYS = {
   p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' },
   p2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+  // teclas alternativas por si tu teclado no admite WASD + flechas a la vez (J2 también puede usar I J K L)
+  alt: { p2: { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL' } },
   pause: ['Escape', 'KeyP'],
 };
