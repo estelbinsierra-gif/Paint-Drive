@@ -9,7 +9,8 @@ import { Car } from './Car.js';
 import { PowerUpField, CoinField, POWERUP_INFO } from './Pickups.js';
 import { Particles } from './Effects.js';
 import { Hud } from './Hud.js';
-import { Keyboard } from './input.js';
+import { Keyboard, readPad } from './input.js';
+import { PixelArena } from './PixelArena.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -48,6 +49,11 @@ export class Game {
 
     this.keys = new Keyboard();
     this._onKey = (e) => {
+      if (e.code === 'F3') {
+        e.preventDefault();
+        this.toggleDiag();
+        return;
+      }
       if (e.repeat || !KEYS.pause.includes(e.code)) return;
       this.togglePause();
     };
@@ -74,6 +80,28 @@ export class Game {
     });
   }
 
+  /** F3: muestra qué teclas llegan al navegador (para descubrir si el teclado "se come" alguna). */
+  toggleDiag() {
+    if (this.diag) {
+      clearInterval(this.diagTimer);
+      this.diag.remove();
+      this.diag = null;
+      return;
+    }
+    this.diag = document.createElement('pre');
+    this.diag.style.cssText =
+      'position:fixed;left:8px;bottom:8px;z-index:50;margin:0;padding:8px 10px;background:#000a;color:#9f9;font:12px monospace;border-radius:6px;pointer-events:none';
+    this.root.append(this.diag);
+    this.diagTimer = setInterval(() => {
+      if (!this.diag) return;
+      const c = this.cars.map((car, i) => {
+        const k = this.controls(i);
+        return `J${i + 1}: gas ${k.throttle}  giro ${k.steer}  vel ${car.speed.toFixed(1)}`;
+      });
+      this.diag.textContent = `Teclas: ${[...this.keys.down].join(' ') || '—'}\n${c.join('\n')}`;
+    }, 80);
+  }
+
   /* ------------------------------------------------------------------ */
   async init() {
     const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
@@ -95,7 +123,13 @@ export class Game {
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a8, 0.9));
 
     // Mapa
-    this.map = await loadGameMap(renderer, MAP.files[this.mode], MAP);
+    // versus: mapa.glb  |  cooperativo: escenario con cuadrícula construido por código (PixelArena)
+    if (this.mode === 'coop') {
+      this.arena = await PixelArena.create(); // Ya no le pasamos el (1), elige al azar
+      this.map = this.arena;
+    } else {
+      this.map = await loadGameMap(renderer, MAP.files[this.mode], MAP);
+    }
     if (this.disposed) return;
     this.nav = this.map.nav;
     scene.add(this.map.root);
@@ -132,11 +166,16 @@ export class Game {
       await this.powerups.load();
       if (this.disposed) return;
     } else {
-      this.coins = new CoinField({ scene, nav: this.nav, count: GAME.coop.points });
-      const car = this.cars[0];
-      this.coins.place([{ x: car.x, z: car.z, r: 8 }]);
-      this.hud.setPoints(0, this.coins.count);
+      // el coche empieza con el color elegido en el menú (si es de la paleta) y cambia al pisar las casillas especiales
+      this.arena.setCurrent(this.arena.indexOfColor(this.colors[1]));
+      this.applyArenaColor();
+      this.hud.setPoints(0, this.arena.totalCells);
       this.timeLeft = GAME.coop.timeLimit;
+
+      // --- NUEVO: Mostrar la imagen de referencia en el HUD ---
+      if (this.arena.imageUrl) {
+        this.hud.setPreview(this.arena.imageUrl);
+      }
     }
 
     this.resize();
@@ -146,7 +185,19 @@ export class Game {
     renderer.setAnimationLoop(this.tick);
   }
 
+  /** Aplica al coche (y al marcador) el color actual del modo cooperativo. */
+  applyArenaColor() {
+    const p = this.arena.palette[this.arena.current];
+    this.cars[0].setColor(p.hex);
+    this.hud.setColor(p.hex, p.name);
+  }
+
   placeCars() {
+    if (this.mode === 'coop') {
+      const g = this.arena.gridCenter;
+      this.cars[0].place(g.x, g.z, Math.PI); // arranca en el centro del dibujo, mirando a la zona de colores
+      return;
+    }
     const { cx, cz, sx } = this.map.bounds;
     const targets = this.mode === 'versus' ? [[cx - sx * 0.28, cz], [cx + sx * 0.28, cz]] : [[cx, cz]];
     this.cars.forEach((car, i) => {
@@ -172,7 +223,12 @@ export class Game {
   /** Vista de águila fija: aleja la cámara hasta que el mapa entero cabe en pantalla. */
   fitCamera() {
     if (!this.map) return;
-    const { cx, cz, sx, sz } = this.map.bounds;
+    const pl = this.nav.play;
+    const m = MAP.cameraMargin ?? 1.5;
+    const cx = pl.cx;
+    const cz = pl.cz;
+    const sx = pl.sx + m * 2;
+    const sz = pl.sz + m * 2;
     const cam = this.camera;
     const tilt = THREE.MathUtils.degToRad(CAMERA.tiltDeg);
     const target = new THREE.Vector3(cx, 0, cz);
@@ -257,9 +313,19 @@ export class Game {
 
   controls(idx) {
     const k = this.keys;
+    const clamp = (v) => Math.max(-1, Math.min(1, v));
     if (this.mode === 'versus') {
       const m = idx === 0 ? KEYS.p1 : KEYS.p2;
-      return { throttle: k.axis(m.down, m.up), steer: k.axis(m.right, m.left) };
+      const alt = idx === 1 ? KEYS.alt?.p2 : null;
+      // Cada jugador lee SOLO sus propias teclas (y su mando): no se mezclan entre sí.
+      let throttle = alt ? k.axis2([m.down, alt.down], [m.up, alt.up]) : k.axis(m.down, m.up);
+      let steer = alt ? k.axis2([m.right, alt.right], [m.left, alt.left]) : k.axis(m.right, m.left);
+      const pad = readPad(idx);
+      if (pad) {
+        steer = clamp(steer + pad.steer);
+        throttle = clamp(throttle + pad.throttle);
+      }
+      return { throttle, steer };
     }
     // cooperativo: J1 = dirección (A/D), J2 = acelerar / frenar (↑/↓)
     return { throttle: k.axis(KEYS.p2.down, KEYS.p2.up), steer: k.axis(KEYS.p1.right, KEYS.p1.left) };
@@ -275,8 +341,14 @@ export class Game {
     }
 
     // coches
-    this.cars.forEach((car, i) => car.update(dt, this.controls(i), this.nav));
-    this.collideCars();
+    // varios pasos pequeños: no se atraviesan muros ni coches aunque el ordenador vaya lento
+    const steps = Math.max(1, Math.ceil(dt / 0.0167));
+    const sub = dt / steps;
+    const ctrls = this.cars.map((_, i) => this.controls(i));
+    for (let s = 0; s < steps; s++) {
+      this.cars.forEach((car, i) => car.update(sub, ctrls[i], this.nav));
+      this.collideCars();
+    }
 
     this.hintTimer -= dt;
     if (this.hintTimer <= 0) this.hud.hideHint();
@@ -296,7 +368,12 @@ export class Game {
       for (const car of this.cars) this.paintCar(car);
       this.powerups.update(dt, this.cars, (car, type, x, z) => this.onPowerUp(car, type, x, z));
     } else {
-      this.coins.update(dt, this.cars[0], (coin) => this.onCoin(coin));
+      this.arena.update(dt, this.cars[0], (k) => {
+        const p = this.arena.palette[k];
+        this.applyArenaColor();
+        this.particles.burst(this.cars[0].x, 0.8, this.cars[0].z, { count: 30, colors: [p.hex, '#ffffff'], speed: 5, life: 0.7, size: 0.3, up: 5 });
+        this.hud.flash(`COLOR · ${p.name}`, p.hex);
+      });
     }
 
     this.refreshHud();
@@ -304,35 +381,71 @@ export class Game {
     // fin
     if (this.mode === 'versus') {
       if (this.timeLeft <= 0) this.finishVersus();
-    } else if (this.coins.remaining === 0) {
+    } else if (this.arena.remaining === 0) {
       this.finishCoop(true);
     } else if (GAME.coop.timeLimit > 0 && this.timeLeft <= 0) {
       this.finishCoop(false);
     }
   }
 
+  /** Choque coche-coche: cada coche son 3 círculos a lo largo (cápsula), con masa, rebote y empujón. */
   collideCars() {
     if (this.cars.length < 2) return;
     const [a, b] = this.cars;
-    let dx = b.x - a.x;
-    let dz = b.z - a.z;
-    let d = Math.hypot(dx, dz);
-    const min = a.bodyRadius + b.bodyRadius;
-    if (d >= min) return;
-    if (d < 1e-4) {
-      dx = 1;
-      dz = 0;
-      d = 1;
+    const pts = (c) => {
+      const f = c.forward;
+      const L = CAR.length * c.size;
+      return [-0.3, 0, 0.3].map((t) => ({ x: c.x + f.x * L * t, z: c.z + f.z * L * t }));
+    };
+    const ra = CAR.length * 0.2 * a.size;
+    const rb = CAR.length * 0.2 * b.size;
+    const ma = a.size * a.size;
+    const mb = b.size * b.size;
+
+    let hit = false;
+    for (let pass = 0; pass < 3; pass++) {
+      const A = pts(a);
+      const B = pts(b);
+      let best = null;
+      for (const p of A) {
+        for (const q of B) {
+          const dx = q.x - p.x;
+          const dz = q.z - p.z;
+          const d = Math.hypot(dx, dz);
+          const pen = ra + rb - d;
+          if (pen > 0 && (!best || pen > best.pen)) best = { pen, nx: d > 1e-4 ? dx / d : 1, nz: d > 1e-4 ? dz / d : 0 };
+        }
+      }
+      if (!best) break;
+      hit = true;
+      const { pen, nx, nz } = best;
+      // el coche más ligero se mueve más
+      a.x -= nx * pen * (mb / (ma + mb));
+      a.z -= nz * pen * (mb / (ma + mb));
+      b.x += nx * pen * (ma / (ma + mb));
+      b.z += nz * pen * (ma / (ma + mb));
+      if (pass === 0) {
+        const va = { x: a.forward.x * a.speed + a.kx, z: a.forward.z * a.speed + a.kz };
+        const vb = { x: b.forward.x * b.speed + b.kx, z: b.forward.z * b.speed + b.kz };
+        const vn = (vb.x - va.x) * nx + (vb.z - va.z) * nz;
+        if (vn < 0) {
+          const j = (-(1 + CAR.knockback) * vn) / (1 / ma + 1 / mb);
+          a.kx -= (j / ma) * nx;
+          a.kz -= (j / ma) * nz;
+          b.kx += (j / mb) * nx;
+          b.kz += (j / mb) * nz;
+          // se frenan algo: la parte de velocidad que choca de frente
+          const fa = a.forward.x * nx + a.forward.z * nz;
+          const fb = b.forward.x * nx + b.forward.z * nz;
+          if (fa * a.speed > 0) a.speed *= 1 - Math.min(0.6, Math.abs(fa) * 0.5);
+          if (fb * b.speed < 0) b.speed *= 1 - Math.min(0.6, Math.abs(fb) * 0.5);
+        }
+      }
     }
-    const nx = dx / d;
-    const nz = dz / d;
-    const push = (min - d) / 2;
-    a.x -= nx * push;
-    a.z -= nz * push;
-    b.x += nx * push;
-    b.z += nz * push;
-    a.speed *= 0.92;
-    b.speed *= 0.92;
+    if (hit) {
+      a.collideWalls(this.nav); // que el empujón no meta a nadie dentro de un muro
+      b.collideWalls(this.nav);
+    }
   }
 
   /** Deja la huella de pintura del coche (rellenando el hueco entre dos frames). */
@@ -383,10 +496,10 @@ export class Game {
       this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
       this.hud.setScores(this.paint.fraction(1), this.paint.fraction(2));
       this.cars.forEach((c) => this.hud.setEffects(c.id, c));
-    } else if (GAME.coop.timeLimit > 0) {
-      this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
     } else {
-      this.hud.setTimer(this.elapsed, { tenths: true });
+      this.hud.setPoints(this.arena.correct, this.arena.totalCells);
+      if (GAME.coop.timeLimit > 0) this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
+      else this.hud.setTimer(this.elapsed, { tenths: true });
     }
   }
 
@@ -420,8 +533,8 @@ export class Game {
   finishCoop(completed) {
     this.state = 'finished';
     this.refreshHud();
-    const total = this.coins.count;
-    const done = this.coins.collected;
+    const total = this.arena.totalCells;
+    const done = this.arena.correct;
     const t = this.elapsed;
     const m = Math.floor(t / 60);
     const time = `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
@@ -430,8 +543,8 @@ export class Game {
       if (this.disposed) return;
       this.hud.clearCount();
       this.hud.showModal({
-        title: completed ? '¡TODOS LOS PUNTOS!' : 'SE ACABÓ EL TIEMPO',
-        subtitle: completed ? `Tiempo: ${time}` : `Puntos recogidos: ${done} / ${total}`,
+        title: completed ? '¡DIBUJO COMPLETADO!' : 'SE ACABÓ EL TIEMPO',
+        subtitle: completed ? `Tiempo: ${time}` : `Casillas bien pintadas: ${done} / ${total}`,
         buttons: [
           { text: 'Jugar otra vez', primary: true, onClick: () => this.restart() },
           { text: 'Volver al menú', onClick: () => this.exit() },
@@ -456,6 +569,8 @@ export class Game {
     window.removeEventListener('keydown', this._onKey);
     window.removeEventListener('resize', this._onResize);
     this.keys.dispose();
+    clearInterval(this.diagTimer);
+    this.diag?.remove();
     this.cars.forEach((c) => c.dispose());
     this.powerups?.dispose();
     this.coins?.dispose();

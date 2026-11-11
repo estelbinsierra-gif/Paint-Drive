@@ -46,6 +46,7 @@ function saveSelection(selection) {
  */
 export function initMainMenu({ onStart }) {
   const selection = loadSelection();
+  const menuEl = document.querySelector('#main-menu');
   const playBtn = document.querySelector('#btn-play');
   const toast = document.querySelector('#toast');
   const modeRadios = [...document.querySelectorAll('input[name="players"]')];
@@ -78,31 +79,79 @@ export function initMainMenu({ onStart }) {
     }),
   );
 
-  // Modo de juego
-  modeRadios.forEach((radio) => {
-    radio.checked = Number(radio.value) === selection.mode;
-    radio.addEventListener('change', () => setMode(Number(radio.value)));
-  });
+  /* ---------- Cambio automático de color (solo en 1 jugador) ---------- */
+
+  // PlayerPanel puede exponer el visor 3D de distintas formas; se busca el objeto
+  // que tenga startAutoColor. Si no existe, el menú funciona igual sin el ciclo.
+  function findScene(panel) {
+    if (!panel) return null;
+    for (const candidate of [panel, panel.scene, panel.carScene, panel.view]) {
+      if (candidate && typeof candidate.startAutoColor === 'function') return candidate;
+    }
+    return null;
+  }
+
+  let autoRunning = false;
+
+  function syncAutoColor() {
+    const want = selection.mode === 1;
+    if (want === autoRunning) return;
+    const scene = findScene(panels[0]);
+    if (!scene) return;
+    try {
+      if (want) {
+        scene.startAutoColor();
+      } else {
+        scene.stopAutoColor?.();
+        // El coche vuelve al color elegido, que es el que muestran los selectores en 2 jugadores
+        scene.setColor?.(selection.p1.color);
+      }
+      autoRunning = want;
+    } catch (err) {
+      console.warn('[Paint Drive] No se pudo cambiar el ciclo automático de color', err);
+    }
+  }
+
+  /* ---------- Modo de juego ---------- */
+
+  // Pone la clase is-1p, marca el radio correcto y arranca o detiene el ciclo de color
+  function reflectMode() {
+    menuEl?.classList.toggle('is-1p', selection.mode === 1);
+    modeRadios.forEach((r) => (r.checked = Number(r.value) === selection.mode));
+    syncAutoColor();
+  }
 
   function setMode(n) {
     selection.mode = n;
-    modeRadios.forEach((r) => (r.checked = Number(r.value) === n));
     saveSelection(selection);
+    reflectMode();
     showToast(`Modo seleccionado: ${n} jugador${n === 1 ? '' : 'es'}`, 1400);
   }
 
+  modeRadios.forEach((radio) => {
+    radio.addEventListener('change', () => setMode(Number(radio.value)));
+  });
+
+  reflectMode(); // estado inicial, sin aviso
+
+  /* ---------- Botón JUGAR ---------- */
   const start = () => onStart(getSelection());
   playBtn.addEventListener('click', start);
 
   // Atajos: Enter = jugar, 1 / 2 = modo de juego
-  window.addEventListener('keydown', (e) => {
+  const onKeyDown = (e) => {
     if (e.key === 'Enter' && e.target !== playBtn) start();
     else if (e.key === '1' || e.key === '2') setMode(Number(e.key));
-  });
+  };
+  window.addEventListener('keydown', onKeyDown);
 
   return {
     showToast,
     getSelection,
-    dispose: () => panels.forEach((p) => p.dispose()),
+    setMode,
+    dispose: () => {
+      window.removeEventListener('keydown', onKeyDown);
+      panels.forEach((p) => p.dispose());
+    },
   };
 }

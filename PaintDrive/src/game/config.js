@@ -20,19 +20,20 @@ export const GAME = {
 /* ---------------- Mapa ---------------- */
 export const MAP = {
   // Qué archivo de src/assets/ se usa en cada modo.
-  // Para el cooperativo puedes poner otra variante, p. ej. 'mapaObstaculos.glb'.
   files: { versus: 'mapa.glb', coop: 'mapa.glb' },
-  size: 60,            // el lado largo del mapa se escala a estas unidades (así el coche siempre cabe bien)
-  grid: 512,           // resolución de la rejilla de colisiones/pintura (celdas en el lado largo)
+  size: 60,            // el lado largo del mapa se escala a estas unidades
+  grid: 512,           // resolución de la rejilla de colisiones/pintura
   obstacleHeight: 0.45, // lo que sobresalga más que esto del suelo cuenta como obstáculo
-  holeDepth: 0.8,       // lo que esté más hundido que esto cuenta como agujero (no se puede entrar)
-  paintScale: 2,        // píxeles de canvas por celda de rejilla (2 -> canvas de ~1024 px)
+  wallHeight: 0.14,     // muros bajos
+  outsideNames: ['grass', 'cesped', 'césped', 'hierba', 'pasto', 'outside', 'exterior', 'terrain'],
+  cameraMargin: 1.5,    // metros extra alrededor de la pista al encuadrar la cámara
+  holeDepth: 0.8,       // lo que esté más hundido que esto cuenta como agujero
+  paintScale: 2,        // píxeles de canvas por celda de rejilla
 };
 
 /* ---------------- Coche ---------------- */
-/* ---------------- Coche ---------------- */
 export const CAR = {
-  length: 4.0,        // <--- Cambia el 3.4 por 4.0 para que se vean más grandes
+  length: 4.0,        // largo del coche
   maxSpeed: 15,
   reverseSpeed: 6,
   accel: 20,
@@ -41,39 +42,36 @@ export const CAR = {
   steerRate: 2.6,     
   brushRadius: 1.3,   
   bodyRadius: 0.42,   
-  wallRadius: 0.36,   // <-- Si ves que chocan muy pronto con las paredes al hacerlos grandes, baja esto a 0.32
+  wallRadius: 0.36,   
   wallOffset: 0.24,   
+  steerRise: 7,       
+  steerReturn: 15,    
+  steerHighSpeed: 0.4,
+  knockback: 0.55,    
 };
 
 /* ---------------- Potenciadores (modo 2 jugadores) ---------------- */
 export const POWERUPS = {
-  // Qué modelo de src/assets/ es cada potenciador
   files: { big: 'puntoGrande.glb', speed: 'puntoVelocidad.glb', splash: 'puntoMancha.glb' },
-  size: 2.6,                   // antes 1.9 → mucho más visibles
-  floatHeight: 0.55,           // altura a la que flotan sobre el suelo
+  size: 2.6,                   
+  floatHeight: 0.55,           
   big: { duration: 8, scale: 1.7 },
   speed: { duration: 6, speedMult: 1.6, accelMult: 1.6 },
-  splash: { radius: 8 },       // radio de la explosión de color
-  spawnEvery: [4, 7],          // cada cuántos segundos (mín, máx) aparece uno nuevo
-  maxActive: 3,                // máximo a la vez en el mapa
-  lifetime: 14,                // segundos que dura sin recogerse
-  pickupRadius: 1.3,           // antes 1.0 → más fácil recogerlos
+  splash: { radius: 8 },       
+  spawnEvery: [4, 7],          
+  maxActive: 3,                
+  lifetime: 14,                
+  pickupRadius: 1.3,           
 };
 
 /* ---------------- Puntos de colores (modo 1 jugador) ---------------- */
 export const COINS = {
   colors: ['#e8222e', '#1f5bff', '#22b04a', '#ffc400', '#a43bff'],
-  radius: 0.95,                // antes 0.65 → monedas más grandes
-  pickupRadius: 1.15,          // antes 0.9
+  radius: 0.95,                
+  pickupRadius: 1.15,          
 };
 
-/* ---------------- Orientación de cada modelo de coche ----------------
- * Si en la partida un coche va "marcha atrás" (avanza con el culo por delante),
- * pon aquí Math.PI para ese vehículo. (0 = el morro mira hacia donde avanza.)
- *
- * sport y tractor van al revés → Math.PI.
- * formula ya va bien → 0.
- */
+/* ---------------- Orientación de cada modelo de coche ---------------- */
 export const VEHICLE_FORWARD_FIX = {
   sport: Math.PI,
   formula: 0,
@@ -82,13 +80,58 @@ export const VEHICLE_FORWARD_FIX = {
 
 /* ---------------- Cámara (vista de águila fija) ---------------- */
 export const CAMERA = {
-  fov: 38,             // antes 40 → un poco más cerrado = coche más grande en pantalla
-  tiltDeg: 16,         // antes 14 → un pelín más inclinada
+  fov: 38,             
+  tiltDeg: 16,         
 };
 
-/* ---------------- Teclas (códigos físicos: valen en teclado español) ---------------- */
+/* ---------------- Teclas (códigos físicos) ---------------- */
 export const KEYS = {
   p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' },
   p2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+  alt: { p2: { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL' } },
   pause: ['Escape', 'KeyP'],
+};
+
+/* ---------------- Personajes para el modo cooperativo ---------------- */
+// El juego elegirá uno de estos al azar cada vez que empieces una partida
+export const CHARACTERS = [
+  {
+    id: 'goku',
+    name: 'Goku',
+    file: 'goku.png',
+    palette: [
+      { name: 'Negro', hex: '#1a1a1a' },
+      { name: 'Carne', hex: '#f5cba7' },
+      { name: 'Naranja', hex: '#e67e22' },
+      { name: 'Azul', hex: '#2980b9' },
+    ]
+  },
+     {
+    id: 'sonic',
+    name: 'Sonic',
+    file: 'sonic.png',
+    palette: [
+      { name: 'Azul', hex: '#007ef3' },   // Azul de Sonic
+      { name: 'Piel', hex: '#f5cba7' },   // Melocotón de la cara
+      { name: 'Rojo', hex: '#e52222' },   // Zapatos
+      { name: 'Negro', hex: '#1a1a1a' },  // Contornos y ojos negros
+    ]
+  }
+];
+
+/* ---------------- Configuración de Píxeles ---------------- */
+export const PIXEL = {
+  cols: 40,            // casillas del dibujo a lo ancho
+  rows: 28,            // casillas del dibujo a lo alto
+  cell: 0.9,           // tamaño de cada casilla
+  margin: 1.0,         // hueco entre el dibujo y los muros
+  paletteW: 6.5,       // ancho de la zona de colores (lado izquierdo)
+  wallHeight: 0.9,
+  wallThickness: 1.5,
+  padSize: 2.3,        // casilla especial de cada color
+  brushRadius: 0.95,   // radio de pintura del coche
+  rule: 'match',       // 'match' = pinta solo si el color coincide; 'free' = pinta cualquier cosa
+  
+  // La paleta se llenará automáticamente desde el personaje elegido en PixelArena.js
+  palette: [], 
 };

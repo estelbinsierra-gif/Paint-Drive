@@ -22,6 +22,9 @@ export class Car {
     this.lastPaint = { x: 0, z: 0 };
     this.roll = 0;
     this.hasPainted = false;
+    this.steerCur = 0; // volante suavizado (-1..1)
+    this.kx = 0; // empuje por choques con otro coche
+    this.kz = 0;
 
     this.root = new THREE.Group(); // posición y giro
     this.tilt = new THREE.Group(); // balanceo al girar
@@ -54,11 +57,19 @@ export class Car {
     return this;
   }
 
+  /** Cambia el color de la carrocería (modo cooperativo). */
+  setColor(hex) {
+    this.color = hex;
+    this.vehicle?.paintMaterials.forEach((m) => m.color.set(hex));
+  }
+
   place(x, z, angle) {
     this.x = x;
     this.z = z;
     this.angle = angle;
     this.speed = 0;
+    this.steerCur = 0;
+    this.kx = this.kz = 0;
     this.lastPaint = { x, z };
     this.hasPainted = false;
     this._sync(0);
@@ -112,18 +123,30 @@ export class Car {
     }
     this.speed = Math.max(-CAR.reverseSpeed, Math.min(maxSpeed, this.speed));
 
-    // dirección (no gira parado; al ir marcha atrás se invierte)
-    const grip = Math.max(-1, Math.min(1, this.speed / 4));
-    this.angle += ctrl.steer * CAR.steerRate * grip * dt;
+    // volante suave: sube despacio, pero vuelve al centro / cambia de lado rápido (giros izq-der ágiles)
+    const target = Math.max(-1, Math.min(1, ctrl.steer));
+    const towards = Math.sign(target) === Math.sign(this.steerCur) && Math.abs(target) > Math.abs(this.steerCur);
+    const rate = towards || this.steerCur === 0 ? CAR.steerRise : CAR.steerReturn;
+    const dS = target - this.steerCur;
+    const maxStep = rate * dt;
+    this.steerCur += Math.abs(dS) <= maxStep ? dS : Math.sign(dS) * maxStep;
 
-    // avance
-    this.x += Math.cos(this.angle) * this.speed * dt;
-    this.z += -Math.sin(this.angle) * this.speed * dt;
+    // dirección (no gira parado; al ir marcha atrás se invierte; a mucha velocidad gira algo menos)
+    const grip = Math.max(-1, Math.min(1, this.speed / 3));
+    const speedFactor = 1 - CAR.steerHighSpeed * Math.min(1, Math.abs(this.speed) / CAR.maxSpeed);
+    this.angle += this.steerCur * CAR.steerRate * speedFactor * grip * dt;
+
+    // avance (+ empuje residual de choques, que se apaga solo)
+    this.x += (Math.cos(this.angle) * this.speed + this.kx) * dt;
+    this.z += (-Math.sin(this.angle) * this.speed + this.kz) * dt;
+    const kd = Math.exp(-6 * dt);
+    this.kx *= kd;
+    this.kz *= kd;
 
     this._collide(nav);
 
     // balanceo visual
-    const rollTarget = -ctrl.steer * Math.min(1, Math.abs(this.speed) / CAR.maxSpeed) * 0.12 * Math.sign(this.speed || 1);
+    const rollTarget = -this.steerCur * Math.min(1, Math.abs(this.speed) / CAR.maxSpeed) * 0.12 * Math.sign(this.speed || 1);
     this.roll += (rollTarget - this.roll) * Math.min(1, dt * 8);
 
     this._sync(nav.heightAt(this.x, this.z));
@@ -136,6 +159,11 @@ export class Car {
    *  - Anti-atasco: si queda atrapado muy dentro de un obstáculo, lo empuja al centro.
    *  - Clamp duro a la caja del mapa: NUNCA se sale del césped/muro exterior.
    */
+  /** Vuelve a colocar el coche fuera de muros (se usa tras un choque entre coches). */
+  collideWalls(nav) {
+    this._collide(nav);
+  }
+
   _collide(nav) {
     const L = CAR.length * this.size;
     const rad = CAR.wallRadius * L;

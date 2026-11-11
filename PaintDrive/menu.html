@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#5db4ff" />
     <title>Paint Drive</title>
+    <!-- Asegúrate de que la ruta a tu CSS sea la correcta -->
+    <link rel="stylesheet" href="/src/style.css" /> 
   </head>
   <body>
     <div id="app">
-      <!-- Arena + salpicaduras -->
+      <!-- Arena + salpicaduras (Se mantiene igual) -->
       <div class="arena-bg" aria-hidden="true">
         <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" focusable="false">
           <defs>
@@ -17,34 +19,22 @@
               <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
             </filter>
           </defs>
-
           <g class="splat splat-red" filter="url(#goo)">
-            <circle cx="260" cy="640" r="210" />
-            <circle cx="120" cy="520" r="140" />
-            <circle cx="430" cy="700" r="150" />
-            <circle cx="300" cy="820" r="170" />
-            <circle cx="80" cy="760" r="120" />
-            <circle cx="520" cy="560" r="60" />
-            <circle cx="600" cy="760" r="45" />
-            <circle cx="180" cy="380" r="40" />
-            <circle cx="640" cy="640" r="26" />
-            <circle cx="700" cy="850" r="22" />
+            <circle cx="260" cy="640" r="210" /><circle cx="120" cy="520" r="140" />
+            <circle cx="430" cy="700" r="150" /><circle cx="300" cy="820" r="170" />
+            <circle cx="80" cy="760" r="120" /><circle cx="520" cy="560" r="60" />
+            <circle cx="600" cy="760" r="45" /><circle cx="180" cy="380" r="40" />
+            <circle cx="640" cy="640" r="26" /><circle cx="700" cy="850" r="22" />
             <circle cx="60" cy="330" r="22" />
             <path class="drip" stroke-width="40" d="M260 760 V 900" />
             <path class="drip" stroke-width="26" d="M430 780 V 900" />
           </g>
-
           <g class="splat splat-blue" filter="url(#goo)">
-            <circle cx="1340" cy="660" r="210" />
-            <circle cx="1480" cy="540" r="140" />
-            <circle cx="1170" cy="720" r="150" />
-            <circle cx="1300" cy="840" r="170" />
-            <circle cx="1520" cy="780" r="120" />
-            <circle cx="1080" cy="590" r="60" />
-            <circle cx="1000" cy="790" r="45" />
-            <circle cx="1420" cy="400" r="40" />
-            <circle cx="960" cy="670" r="26" />
-            <circle cx="900" cy="850" r="22" />
+            <circle cx="1340" cy="660" r="210" /><circle cx="1480" cy="540" r="140" />
+            <circle cx="1170" cy="720" r="150" /><circle cx="1300" cy="840" r="170" />
+            <circle cx="1520" cy="780" r="120" /><circle cx="1080" cy="590" r="60" />
+            <circle cx="1000" cy="790" r="45" /><circle cx="1420" cy="400" r="40" />
+            <circle cx="960" cy="670" r="26" /><circle cx="900" cy="850" r="22" />
             <circle cx="1540" cy="350" r="22" />
             <path class="drip" stroke-width="40" d="M1340 760 V 900" />
             <path class="drip" stroke-width="26" d="M1170 780 V 900" />
@@ -52,8 +42,8 @@
         </svg>
       </div>
 
-      <main class="menu">
-        <!-- JUGADOR 1 -->
+      <main class="menu is-1p" id="main-menu">
+        <!-- JUGADOR 1 (Izquierda) -->
         <section class="player player-1" data-player="1" aria-label="Jugador 1">
           <div class="player-head">
             <div class="banner">
@@ -72,9 +62,11 @@
             </div>
           </div>
 
+          <!-- El visor del coche se moverá visualmente con CSS -->
           <div class="car-view"><canvas aria-label="Coche del jugador 1"></canvas></div>
 
-          <div class="player-foot">
+          <!-- Selector de color: SOLO VISIBLE EN 2 JUGADORES (el CSS lo oculta en 1P) -->
+          <div class="player-foot p1-colors">
             <div class="colors">
               <div class="colors-row">
                 <button type="button" class="arrow" data-action="color-prev" aria-label="Color anterior (jugador 1)">‹</button>
@@ -86,15 +78,18 @@
           </div>
         </section>
 
-        <!-- Centro -->
-        <div class="logo-wrap">
-          <h1 class="logo">
-            <span class="logo-paint">Paint</span>
-            <span class="logo-drive">Drive</span>
-          </h1>
-          <p class="tagline">PINTA EL MAPA Y GANA</p>
+        <!-- CENTRO: Logo y botón Jugar -->
+        <div class="center-column">
+          <div class="logo-wrap">
+            <h1 class="logo">
+              <span class="logo-paint">Paint</span>
+              <span class="logo-drive">Drive</span>
+            </h1>
+            <p class="tagline">PINTA EL MAPA Y GANA</p>
+          </div>
         </div>
 
+        <!-- DERECHA: Botón Jugar -->
         <div class="play-wrap">
           <button id="btn-play" class="btn-play" type="button" aria-label="Jugar">
             <span class="play-icon"></span>
@@ -102,6 +97,7 @@
           <span class="play-label">JUGAR</span>
         </div>
 
+        <!-- ABAJO: Modos de juego -->
         <div class="mode-panel">
           <p class="mode-title">MODO DE JUEGO</p>
           <div class="mode-select" role="radiogroup" aria-label="Número de jugadores">
@@ -116,7 +112,7 @@
           </div>
         </div>
 
-        <!-- JUGADOR 2 -->
+        <!-- JUGADOR 2 (Oculto por defecto en 1P) -->
         <section class="player player-2" data-player="2" aria-label="Jugador 2">
           <div class="player-head">
             <div class="banner">

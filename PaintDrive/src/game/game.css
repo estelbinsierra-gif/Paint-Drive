@@ -127,6 +127,18 @@
 }
 .pd-coop-score .pd-big { font-size: 1.9em; letter-spacing: 0.06em; }
 .pd-spacer { flex: 1 1 0; max-width: 380px; }
+.pd-coop-color {
+  flex: 1 1 0;
+  max-width: 380px;
+  padding: 0.45em 0.8em 0.55em;
+  text-align: right;
+  background: linear-gradient(180deg, rgba(30, 30, 72, 0.92), rgba(8, 8, 26, 0.92));
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 3px #7a2cff, 0 4px 10px rgba(0, 0, 0, 0.4);
+  font-size: clamp(0.75rem, 1.5vw, 1.1rem);
+}
+.pd-coop-color .pd-swatch { display: flex; align-items: center; justify-content: flex-end; gap: 0.5em; font-size: 1.5em; }
+.pd-coop-color i { width: 1.1em; height: 1.1em; border-radius: 50%; background: #888; box-shadow: 0 0 0 3px #fff; }
 
 /* ---------- Mensajes centrales ---------- */
 .pd-center {
@@ -273,6 +285,30 @@
 @media (max-width: 720px) {
   .pd-top { flex-wrap: wrap; justify-content: center; }
   .pd-timer { order: -1; flex: 1 1 100%; align-self: center; max-width: 9em; }
-  .pd-score, .pd-coop-score { flex: 1 1 40%; }
+  .pd-score, .pd-coop-score, .pd-coop-color { flex: 1 1 40%; }
   .pd-spacer { display: none; }
+}
+
+/* --- Miniatura del dibujo de referencia (Modo Cooperativo) --- */
+.pd-preview-box {
+  position: absolute;
+  top: 80px; /* Ajusta esto si quieres que esté más arriba o abajo */
+  right: 20px;
+  width: 160px; /* Tamaño de la cajita */
+  background: rgba(8, 8, 24, 0.85);
+  border: 3px solid #7a2cff; /* Borde morado de Paint Drive */
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 0 15px rgba(122, 44, 255, 0.6);
+  pointer-events: none; /* No bloquea los clics */
+  z-index: 10;
+}
+
+.pd-preview-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  image-rendering: pixelated; /* Hace que los píxeles se vean nítidos */
+  image-rendering: crisp-edges;
 }
