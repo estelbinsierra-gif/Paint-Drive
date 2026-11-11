@@ -121,7 +121,8 @@ body {
   --accent-bright: var(--blue-bright);
   --accent-dark: var(--blue-dark);
 }
-.logo-wrap {
+/* El logo vive dentro de .center-column, que es el hijo directo de la rejilla */
+.center-column {
   grid-area: logo;
 }
 .play-wrap {
@@ -129,6 +130,13 @@ body {
 }
 .mode-panel {
   grid-area: mode;
+}
+
+/* El botón y el selector de modo siempre por encima de los paneles de jugador */
+.play-wrap,
+.mode-panel {
+  position: relative;
+  z-index: 10;
 }
 
 /* ---------- Título ---------- */
@@ -215,6 +223,14 @@ body {
 .btn-play:focus-visible {
   outline: 4px solid #fff;
   outline-offset: 5px;
+}
+/* main.js lo bloquea cuando los dos jugadores tienen el mismo color */
+.btn-play:disabled,
+.btn-play.is-blocked {
+  animation: none;
+  cursor: not-allowed;
+  filter: grayscale(1) brightness(0.8);
+  transform: none;
 }
 
 .play-icon {
@@ -551,6 +567,79 @@ body {
   }
   .car-view {
     max-height: 32vh;
+  }
+}
+
+/* =====================================================================
+   MODO 1 JUGADOR  (.menu.is-1p, lo pone y quita MainMenu.js)
+   Jugador 2 fuera, coche grande en el centro, sin selector de color.
+   ===================================================================== */
+
+/* El jugador 2 desaparece del todo: no ocupa sitio ni recibe clics */
+.menu.is-1p .player-2,
+.menu.is-1p .p1-colors {
+  display: none;
+}
+
+/* El <section> del jugador 1 deja de ser una caja: su banner y su visor
+   pasan a ser celdas de la rejilla del menú, sin tocar el HTML */
+.menu.is-1p .player-1 {
+  display: contents;
+}
+
+.menu.is-1p {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 46vw) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    ". logo ."
+    "p1 car play"
+    ". mode .";
+}
+
+.menu.is-1p .player-head {
+  grid-area: p1;
+  align-self: start;
+  justify-self: start;
+}
+
+.menu.is-1p .car-view {
+  grid-area: car;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  pointer-events: none;
+}
+
+.menu.is-1p .play-wrap {
+  align-self: start;
+  justify-self: center;
+}
+
+/* 1 jugador en pantallas estrechas o verticales: todo en una columna */
+@media (max-aspect-ratio: 1/1), (max-width: 720px) {
+  .menu.is-1p {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      "logo"
+      "p1"
+      "car"
+      "play"
+      "mode";
+  }
+  .menu.is-1p .player-head {
+    justify-self: center;
+  }
+  .menu.is-1p .car-view {
+    height: auto;
+    aspect-ratio: 4 / 3;
+    width: min(100%, 460px);
+    justify-self: center;
+  }
+  .menu.is-1p .play-wrap {
+    align-self: center;
   }
 }
 

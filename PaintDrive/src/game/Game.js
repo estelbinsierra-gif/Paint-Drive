@@ -10,6 +10,7 @@ import { PowerUpField, CoinField, POWERUP_INFO } from './Pickups.js';
 import { Particles } from './Effects.js';
 import { Hud } from './Hud.js';
 import { Keyboard, readPad } from './input.js';
+import { PixelArena } from './PixelArena.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -122,7 +123,13 @@ export class Game {
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a8, 0.9));
 
     // Mapa
-    this.map = await loadGameMap(renderer, MAP.files[this.mode], MAP);
+    // versus: mapa.glb  |  cooperativo: escenario con cuadrícula construido por código (PixelArena)
+    if (this.mode === 'coop') {
+      this.arena = await PixelArena.create(); // Ya no le pasamos el (1), elige al azar
+      this.map = this.arena;
+    } else {
+      this.map = await loadGameMap(renderer, MAP.files[this.mode], MAP);
+    }
     if (this.disposed) return;
     this.nav = this.map.nav;
     scene.add(this.map.root);
@@ -159,11 +166,16 @@ export class Game {
       await this.powerups.load();
       if (this.disposed) return;
     } else {
-      this.coins = new CoinField({ scene, nav: this.nav, count: GAME.coop.points });
-      const car = this.cars[0];
-      this.coins.place([{ x: car.x, z: car.z, r: 8 }]);
-      this.hud.setPoints(0, this.coins.count);
+      // el coche empieza con el color elegido en el menú (si es de la paleta) y cambia al pisar las casillas especiales
+      this.arena.setCurrent(this.arena.indexOfColor(this.colors[1]));
+      this.applyArenaColor();
+      this.hud.setPoints(0, this.arena.totalCells);
       this.timeLeft = GAME.coop.timeLimit;
+
+      // --- NUEVO: Mostrar la imagen de referencia en el HUD ---
+      if (this.arena.imageUrl) {
+        this.hud.setPreview(this.arena.imageUrl);
+      }
     }
 
     this.resize();
@@ -173,7 +185,19 @@ export class Game {
     renderer.setAnimationLoop(this.tick);
   }
 
+  /** Aplica al coche (y al marcador) el color actual del modo cooperativo. */
+  applyArenaColor() {
+    const p = this.arena.palette[this.arena.current];
+    this.cars[0].setColor(p.hex);
+    this.hud.setColor(p.hex, p.name);
+  }
+
   placeCars() {
+    if (this.mode === 'coop') {
+      const g = this.arena.gridCenter;
+      this.cars[0].place(g.x, g.z, Math.PI); // arranca en el centro del dibujo, mirando a la zona de colores
+      return;
+    }
     const { cx, cz, sx } = this.map.bounds;
     const targets = this.mode === 'versus' ? [[cx - sx * 0.28, cz], [cx + sx * 0.28, cz]] : [[cx, cz]];
     this.cars.forEach((car, i) => {
@@ -344,7 +368,12 @@ export class Game {
       for (const car of this.cars) this.paintCar(car);
       this.powerups.update(dt, this.cars, (car, type, x, z) => this.onPowerUp(car, type, x, z));
     } else {
-      this.coins.update(dt, this.cars[0], (coin) => this.onCoin(coin));
+      this.arena.update(dt, this.cars[0], (k) => {
+        const p = this.arena.palette[k];
+        this.applyArenaColor();
+        this.particles.burst(this.cars[0].x, 0.8, this.cars[0].z, { count: 30, colors: [p.hex, '#ffffff'], speed: 5, life: 0.7, size: 0.3, up: 5 });
+        this.hud.flash(`COLOR · ${p.name}`, p.hex);
+      });
     }
 
     this.refreshHud();
@@ -352,7 +381,7 @@ export class Game {
     // fin
     if (this.mode === 'versus') {
       if (this.timeLeft <= 0) this.finishVersus();
-    } else if (this.coins.remaining === 0) {
+    } else if (this.arena.remaining === 0) {
       this.finishCoop(true);
     } else if (GAME.coop.timeLimit > 0 && this.timeLeft <= 0) {
       this.finishCoop(false);
@@ -467,10 +496,10 @@ export class Game {
       this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
       this.hud.setScores(this.paint.fraction(1), this.paint.fraction(2));
       this.cars.forEach((c) => this.hud.setEffects(c.id, c));
-    } else if (GAME.coop.timeLimit > 0) {
-      this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
     } else {
-      this.hud.setTimer(this.elapsed, { tenths: true });
+      this.hud.setPoints(this.arena.correct, this.arena.totalCells);
+      if (GAME.coop.timeLimit > 0) this.hud.setTimer(this.timeLeft, { low: this.timeLeft <= 10 });
+      else this.hud.setTimer(this.elapsed, { tenths: true });
     }
   }
 
@@ -504,8 +533,8 @@ export class Game {
   finishCoop(completed) {
     this.state = 'finished';
     this.refreshHud();
-    const total = this.coins.count;
-    const done = this.coins.collected;
+    const total = this.arena.totalCells;
+    const done = this.arena.correct;
     const t = this.elapsed;
     const m = Math.floor(t / 60);
     const time = `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
@@ -514,8 +543,8 @@ export class Game {
       if (this.disposed) return;
       this.hud.clearCount();
       this.hud.showModal({
-        title: completed ? '¡TODOS LOS PUNTOS!' : 'SE ACABÓ EL TIEMPO',
-        subtitle: completed ? `Tiempo: ${time}` : `Puntos recogidos: ${done} / ${total}`,
+        title: completed ? '¡DIBUJO COMPLETADO!' : 'SE ACABÓ EL TIEMPO',
+        subtitle: completed ? `Tiempo: ${time}` : `Casillas bien pintadas: ${done} / ${total}`,
         buttons: [
           { text: 'Jugar otra vez', primary: true, onClick: () => this.restart() },
           { text: 'Volver al menú', onClick: () => this.exit() },

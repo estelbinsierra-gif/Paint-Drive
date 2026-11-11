@@ -41,13 +41,6 @@ const menu = initMainMenu({
       return;
     }
 
-    // PARTE 1: solo está el modo 2 JUGADORES (pintar el mapa). El modo 1 JUGADOR (cooperativo) llega en la parte 2.
-    // Cuando esté listo, borra este bloque.
-    if (selection.players !== 2) {
-      menu.showToast('El modo 1 JUGADOR (cooperativo) llega en la parte 2. Prueba el modo 2 JUGADORES.', 4000);
-      return;
-    }
-
     playing = true;
     warn.remove();
     clearInterval(colorTimer);

@@ -2,10 +2,6 @@ import * as THREE from 'three';
 import { createVehicle } from '../menu/vehicles.js';
 import { CAR, POWERUPS, VEHICLE_FORWARD_FIX } from './config.js';
 
-// Ajustes de manejo con valores por defecto: si falta alguno en config.js, el coche sigue funcionando
-// (antes, sin steerRise/steerReturn/steerHighSpeed el volante daba NaN y el coche dejaba de responder).
-const TUNE = { steerRise: 8, steerReturn: 16, steerHighSpeed: 0.3, steerGrip: 1.5, turnDrag: 0.25, ...CAR };
-
 /**
  * Coche jugable: modelo 3D + física arcade sencilla.
  * Convención: el ángulo `angle` es el de rotation.y de three.js; el coche avanza hacia (cos a, -sin a) en (x, z).
@@ -61,6 +57,12 @@ export class Car {
     return this;
   }
 
+  /** Cambia el color de la carrocería (modo cooperativo). */
+  setColor(hex) {
+    this.color = hex;
+    this.vehicle?.paintMaterials.forEach((m) => m.color.set(hex));
+  }
+
   place(x, z, angle) {
     this.x = x;
     this.z = z;
@@ -110,7 +112,7 @@ export class Car {
     const accel = CAR.accel * (boost ? POWERUPS.speed.accelMult : 1);
 
     // velocidad
-    const t = Math.max(-1, Math.min(1, ctrl.throttle || 0));
+    const t = ctrl.throttle;
     if (t > 0) {
       this.speed += (this.speed < 0 ? CAR.brake : accel) * t * dt;
     } else if (t < 0) {
@@ -122,20 +124,17 @@ export class Car {
     this.speed = Math.max(-CAR.reverseSpeed, Math.min(maxSpeed, this.speed));
 
     // volante suave: sube despacio, pero vuelve al centro / cambia de lado rápido (giros izq-der ágiles)
-    const target = Math.max(-1, Math.min(1, ctrl.steer || 0));
+    const target = Math.max(-1, Math.min(1, ctrl.steer));
     const towards = Math.sign(target) === Math.sign(this.steerCur) && Math.abs(target) > Math.abs(this.steerCur);
-    const rate = towards || this.steerCur === 0 ? TUNE.steerRise : TUNE.steerReturn;
+    const rate = towards || this.steerCur === 0 ? CAR.steerRise : CAR.steerReturn;
     const dS = target - this.steerCur;
     const maxStep = rate * dt;
     this.steerCur += Math.abs(dS) <= maxStep ? dS : Math.sign(dS) * maxStep;
 
     // dirección (no gira parado; al ir marcha atrás se invierte; a mucha velocidad gira algo menos)
-    const grip = Math.max(-1, Math.min(1, this.speed / TUNE.steerGrip)); // gira casi desde parado
-    const sp = Math.min(1, Math.abs(this.speed) / CAR.maxSpeed);
-    const speedFactor = 1 - TUNE.steerHighSpeed * sp;
+    const grip = Math.max(-1, Math.min(1, this.speed / 3));
+    const speedFactor = 1 - CAR.steerHighSpeed * Math.min(1, Math.abs(this.speed) / CAR.maxSpeed);
     this.angle += this.steerCur * CAR.steerRate * speedFactor * grip * dt;
-    // al girar fuerte a mucha velocidad el coche pierde un poco de velocidad (como un derrape suave)
-    this.speed -= this.speed * TUNE.turnDrag * Math.abs(this.steerCur) * sp * dt;
 
     // avance (+ empuje residual de choques, que se apaga solo)
     this.x += (Math.cos(this.angle) * this.speed + this.kx) * dt;

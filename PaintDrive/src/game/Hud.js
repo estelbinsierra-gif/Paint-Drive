@@ -33,6 +33,15 @@ export class Hud {
     root.style.setProperty('--c2', cfg.colors[2]);
 
     this.hud = el('div', 'pd-hud');
+    
+    // --- NUEVO: Contenedor para la imagen de referencia ---
+    this.previewBox = el('div', 'pd-preview-box');
+    this.previewImg = el('img', 'pd-preview-img');
+    this.previewBox.append(this.previewImg);
+    this.previewBox.style.display = 'none'; // Oculto hasta que se cargue una imagen
+    this.hud.append(this.previewBox);
+    // -----------------------------------------------------
+
     this.top = el('div', 'pd-top');
     this.hud.append(this.top);
 
@@ -51,9 +60,12 @@ export class Hud {
       this.top.append(this.p[1].box, this.timer, this.p[2].box);
     } else {
       const left = el('div', 'pd-coop-score');
-      left.innerHTML = '<div>PUNTOS</div><div class="pd-big">0 / 0</div>';
+      left.innerHTML = '<div>CASILLAS</div><div class="pd-big">0 / 0</div>';
       this.coopBig = left.querySelector('.pd-big');
-      this.top.append(left, this.timer, el('div', 'pd-spacer'));
+      const col = el('div', 'pd-coop-color', '<div>COLOR</div><div class="pd-swatch"><i></i><b>—</b></div>');
+      this.colorDot = col.querySelector('i');
+      this.colorName = col.querySelector('b');
+      this.top.append(left, this.timer, col);
     }
 
     this.center = el('div', 'pd-center');
@@ -81,6 +93,17 @@ export class Hud {
     this.loading = null;
   }
 
+  // --- NUEVO: Método para mostrar la imagen en el HUD ---
+  setPreview(url) {
+    if (url) {
+      this.previewImg.src = url;
+      this.previewBox.style.display = 'block';
+    } else {
+      this.previewBox.style.display = 'none';
+    }
+  }
+  // ------------------------------------------------------
+
   setTimer(seconds, { tenths = false, low = false } = {}) {
     this.timer.textContent = tenths ? fmtTenths(seconds) : fmt(seconds);
     this.timer.classList.toggle('low', low);
@@ -91,6 +114,13 @@ export class Hud {
       this.p[id].pct.textContent = `${(f * 100).toFixed(1)}%`;
       this.p[id].bar.style.width = `${Math.min(100, f * 100)}%`;
     }
+  }
+
+  /** Color actual del coche (modo cooperativo). */
+  setColor(hex, name) {
+    if (!this.colorDot) return;
+    this.colorDot.style.background = hex;
+    this.colorName.textContent = name;
   }
 
   setPoints(done, total) {
