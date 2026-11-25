@@ -6,11 +6,11 @@ const glbUrls = import.meta.glob('../assets/*.glb', { query: '?url', import: 'de
 
 export const POWERUP_INFO = {
   // big: Rojo (antes verde) - 0xff2222 / #ff2222
-  big: { label: 'GRANDE', ring: 0xff2222, css: '#ff2222', icon: '⬆' },
+  big: { label: 'GRANDE', ring: 0xff2222, css: '#ff2222' },
   // speed: Azul (antes amarillo) - 0x1f5bff / #1f5bff
-  speed: { label: 'VELOCIDAD', ring: 0x1f5bff, css: '#1f5bff', icon: '⚡' },
+  speed: { label: 'VELOCIDAD', ring: 0x1f5bff, css: '#1f5bff'  },
   // splash: Morado (se queda igual)
-  splash: { label: 'EXPLOSIÓN', ring: 0xff3bd4, css: '#ff3bd4', icon: '✹' },
+  splash: { label: 'EXPLOSIÓN', ring: 0xff3bd4, css: '#ff3bd4'},
 };
 
 /* ------------------------------------------------------------------ */
@@ -41,8 +41,8 @@ async function loadTemplate(type) {
       });
       trash.forEach((o) => o.parent?.remove(o));
 
-      // Forzamos un tamaño más grande para que tu círculo azul se vea bien
-      return fit(m, POWERUPS.size * 1.5);
+      // ¡CORREGIDO! Quitamos el "* 1.5" para que respete el tamaño del config.js
+      return fit(m, POWERUPS.size);
     } catch (err) {
       console.warn(`[Paint Drive] No se pudo cargar ${file}; se usa un modelo provisional.`, err);
     }
@@ -195,18 +195,18 @@ export class PowerUpField {
       halo.position.y = 0.05;
       halo.renderOrder = 1;
 
-      // --- ICONO GIGANTE (Solo como respaldo por si el GLB mide 0) ---
+      // --- ICONO (Escalado para que no sea gigante) ---
       const iconGroup = new THREE.Group();
-      const iconGeo = new THREE.ConeGeometry(0.45, 1.3, 4);
+      const iconGeo = new THREE.ConeGeometry(0.45 * POWERUPS.size, 1.3 * POWERUPS.size, 4);
       const iconMat = new THREE.MeshBasicMaterial({ color: info.ring, toneMapped: false, transparent: true, opacity: 0.5 });
       
       if (type === 'speed') {
         const i1 = new THREE.Mesh(iconGeo, iconMat);
         i1.rotation.z = Math.PI / 3;
-        i1.position.set(0, 0.3, 0);
+        i1.position.set(0, 0.3 * POWERUPS.size, 0);
         const i2 = new THREE.Mesh(iconGeo, iconMat);
         i2.rotation.z = Math.PI / 3;
-        i2.position.set(0, -0.3, 0);
+        i2.position.set(0, -0.3 * POWERUPS.size, 0);
         iconGroup.add(i1, i2);
       }
       iconGroup.position.y = POWERUPS.floatHeight;

@@ -7,11 +7,16 @@ const CAMERA_FOV = 35;
 const CAMERA_ELEVATION = 0.28;                       // inclinación de la cámara
 const CAMERA_TARGET = new THREE.Vector3(0, 0.55, 0);
 const SPIN_SPEED = 0.45;                             // rad/s
+const AUTO_INTERVAL = [4, 6];                        // segundos entre cambios de color (modo 1 jugador)
+const AUTO_TRANSITION = 1.8;                         // segundos que dura el fundido de un color al siguiente
 /* ================================== */
+
+/** Colores por los que pasa el coche en el modo 1 jugador (en este orden, y vuelve a empezar). */
+export const AUTO_COLOR_CYCLE = ['#e8222e', '#1f5bff', '#22b04a', '#ffc400', '#a43bff', '#ff4fb0'];
 
 /**
  * Visor 3D de un vehículo sobre una plataforma con anillo de neón.
- * Uno por jugador. Devuelve { setVehicle, setColor, dispose }.
+ * Uno por jugador. Devuelve { setVehicle, setColor, startAutoColor, stopAutoColor, dispose }.
  */
 export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'sport', color } = {}) {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -92,6 +97,11 @@ export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'spor
 
   let current = null;
   let currentColor = color;
+  // Color que se está viendo ahora mismo (puede estar a medio fundido) y animación en curso
+  const shown = new THREE.Color(color || '#ffffff');
+  const fade = { active: false, t: 0, dur: AUTO_TRANSITION, from: new THREE.Color(), to: new THREE.Color() };
+  // Ciclo automático de colores
+  const auto = { on: false, list: AUTO_COLOR_CYCLE, i: 0, wait: 0, transition: AUTO_TRANSITION };
   let loadToken = 0;
   let disposed = false;
 
@@ -108,12 +118,66 @@ export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'spor
     }
     current = vehicle;
     carSlot.add(vehicle.object);
-    if (currentColor) applyColor(currentColor);
+    if (currentColor) paintShown(); // el vehículo nuevo sigue con el color (y el ciclo) actuales
   }
 
-  function applyColor(hex) {
+  function paintShown() {
+    current?.paintMaterials.forEach((m) => m.color.copy(shown));
+  }
+
+  /** Cambia el color. Con { smooth: true } hace un fundido gradual en vez de un salto. */
+  function applyColor(hex, { smooth = false, duration = AUTO_TRANSITION } = {}) {
     currentColor = hex;
-    current?.paintMaterials.forEach((m) => m.color.set(hex));
+    if (!smooth) {
+      fade.active = false;
+      shown.set(hex);
+      paintShown();
+      return;
+    }
+    fade.from.copy(shown);
+    fade.to.set(hex);
+    fade.t = 0;
+    fade.dur = Math.max(0.05, duration);
+    fade.active = true;
+  }
+
+  const ease = (t) => t * t * (3 - 2 * t); // arranque y llegada suaves
+
+  /** Avanza el fundido y el ciclo automático `dt` segundos. */
+  function tickColor(dt) {
+    if (auto.on) {
+      auto.wait -= dt;
+      if (auto.wait <= 0) {
+        auto.i = (auto.i + 1) % auto.list.length;
+        applyColor(auto.list[auto.i], { smooth: !reduceMotion, duration: auto.transition });
+        auto.wait = AUTO_INTERVAL[0] + Math.random() * (AUTO_INTERVAL[1] - AUTO_INTERVAL[0]);
+      }
+    }
+    if (fade.active) {
+      fade.t = Math.min(1, fade.t + dt / fade.dur);
+      shown.copy(fade.from).lerp(fade.to, ease(fade.t));
+      if (fade.t >= 1) fade.active = false;
+      paintShown();
+    }
+  }
+
+  /**
+   * Modo 1 jugador: el coche recorre solo los colores. Empieza con el primero (o el actual si coincide)
+   * y cada 4-6 s hace un fundido suave al siguiente; al llegar al último vuelve al primero.
+   */
+  function startAutoColor(list = AUTO_COLOR_CYCLE) {
+    auto.list = list;
+    auto.on = true;
+    const cur = currentColor ? String(currentColor).toLowerCase() : '';
+    const k = list.findIndex((c) => c.toLowerCase() === cur);
+    auto.i = k >= 0 ? k : 0;
+    if (k < 0) applyColor(list[0]);
+    auto.wait = AUTO_INTERVAL[0] + Math.random() * (AUTO_INTERVAL[1] - AUTO_INTERVAL[0]);
+  }
+
+  /** Detiene el ciclo (el color se queda como esté; si había un fundido, termina de llegar al color destino). */
+  function stopAutoColor() {
+    auto.on = false;
   }
 
   /* ---------- Tamaño / cámara ---------- */
@@ -125,7 +189,7 @@ export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'spor
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    const dist = Math.max(9.5, 8.2 / camera.aspect);
+    const dist = Math.max(9.5, 12.4 / camera.aspect); // en visores estrechos se aleja para que la plataforma entre entera
     camBase.z = dist;
     camBase.y = CAMERA_TARGET.y + dist * CAMERA_ELEVATION;
     camera.updateProjectionMatrix();
@@ -144,6 +208,7 @@ export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'spor
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
+    tickColor(dt);
     if (!reduceMotion) {
       carSlot.rotation.y += dt * SPIN_SPEED;
       camera.position.x += (pointer.x * 0.6 - camera.position.x) * 0.05;
@@ -172,7 +237,7 @@ export function createCarScene(canvas, { ringColor = 0xff3b57, vehicleId = 'spor
     renderer.dispose();
   }
 
-  return { setVehicle, setColor: applyColor, dispose };
+  return { setVehicle, setColor: applyColor, startAutoColor, stopAutoColor, tickColor, getColor: () => '#' + shown.getHexString(), dispose };
 }
 
 function makeGlowTexture() {

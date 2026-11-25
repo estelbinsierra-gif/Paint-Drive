@@ -73,5 +73,6 @@ export function createPlayerPanel(root, { player, ringColor, vehicleId, color, o
   });
 
   renderName();
-  return { dispose: () => scene.dispose() };
+  // `scene` es el visor 3D (setColor, startAutoColor, stopAutoColor...): MainMenu lo usa para el ciclo de color del modo 1 jugador
+  return { scene, dispose: () => scene.dispose() };
 }

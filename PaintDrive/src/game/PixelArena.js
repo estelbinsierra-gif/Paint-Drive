@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { PIXEL, CHARACTERS } from './config.js';
 
-// Carga TODAS las imágenes de la carpeta dibujos automáticamente
 const drawingUrls = import.meta.glob('../assets/dibujos/*.png', { query: '?url', import: 'default', eager: true });
 
 const NONE = 255;
@@ -15,15 +14,26 @@ function quantize(canvas) {
   const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
   const pal = PIXEL.palette.map((p) => hexRgb(p.hex));
   
-  // AÑADIMOS EL BLANCO A LA PALETA INTERNA (será el índice 4, el intocable)
+  // AÑADIMOS EL BLANCO A LA PALETA INTERNA (será el último índice)
   pal.push([255, 255, 255]); 
+
+  // --- TRUCO PARA FORZAR EL VERDE (Para Finn) ---
+  const greenIndex = PIXEL.palette.findIndex(p => p.name.toLowerCase().includes('verde'));
 
   const out = new Uint8Array(w * h).fill(NONE);
   for (let i = 0; i < w * h; i++) {
     const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2], a = data[i * 4 + 3];
+    
     // Solo ignoramos lo transparente (canal alfa)
     if (a < 128) continue; 
     
+    // Si el personaje tiene verde y el píxel es claramente verde, lo forzamos
+    if (greenIndex !== -1 && g > 50 && g > r * 1.1 && g > b * 1.1) {
+      out[i] = greenIndex;
+      continue;
+    }
+    // -----------------------------------------------
+
     let best = 0, bd = Infinity;
     pal.forEach((c, k) => {
       const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
@@ -41,6 +51,31 @@ function loadImage(url) {
     im.onerror = rej;
     im.src = url;
   });
+}
+
+/** Dibuja un candado en un canvas para usarlo como textura 3D */
+function makeLockTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffd400';
+  ctx.beginPath();
+  ctx.roundRect(34, 54, 60, 50, 10);
+  ctx.fill();
+  ctx.strokeStyle = '#ffd400';
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.arc(64, 54, 22, Math.PI, 0, false);
+  ctx.stroke();
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath();
+  ctx.arc(64, 75, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(60, 75, 8, 12);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 export class PixelArena {
@@ -66,11 +101,10 @@ export class PixelArena {
         c.width = PIXEL.cols;
         c.height = PIXEL.rows;
         const x = c.getContext('2d');
-        // Dibujar la imagen escalada a 40x28
         x.drawImage(im, 0, 0, PIXEL.cols, PIXEL.rows);
         a.target = quantize(c);
         
-        a.imageUrl = url; // <--- NUEVA LÍNEA: Guardamos la URL para mostrarla en el HUD
+        a.imageUrl = url; // <--- Guardamos la URL para el HUD
         
       } catch (e) {
         console.warn(`[Paint Drive] No se pudo leer ${character.file}; se usa un dibujo por defecto.`, e);
@@ -99,9 +133,22 @@ export class PixelArena {
     this.palette = pal;
     this.painted = new Uint8Array(cols * rows).fill(NONE);
     
-    // EL BLANCO (índice 4) NO CUENTA COMO CASILLA PARA GANAR
-    this.totalCells = this.target.reduce((n, t) => n + (t !== NONE && t !== 4 ? 1 : 0), 0);
+    // --- LÓGICA DE CANDADOS Y BLANCO DINÁMICO ---
+    this.whiteIdx = pal.length; // El blanco siempre es el último índice (4, 5, etc)
     
+    this.colorTargets = new Array(pal.length).fill(0);
+    this.colorPainted = new Array(pal.length).fill(0);
+    this.locked = new Array(pal.length).fill(false);
+
+    this.totalCells = 0;
+    this.target.forEach((t) => {
+      if (t !== NONE && t !== this.whiteIdx) {
+        this.totalCells++;
+        if (t < pal.length) this.colorTargets[t]++;
+      }
+    });
+    // ----------------------------------------------
+
     this.correct = 0;
     this.current = 0;
     this.time = 0;
@@ -155,23 +202,34 @@ export class PixelArena {
     addWall(T, sz, x1 + T / 2, 0);
 
     this.pads = [];
+    const lockTex = makeLockTexture();
+    
     const pitch = sz / pal.length;
     pal.forEach((p, k) => {
       const px = x0 + paletteW / 2;
       const pz = z0 + pitch * (k + 0.5);
+      
       const frameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
       const frame = new THREE.Mesh(new THREE.BoxGeometry(padSize + 0.35, 0.1, padSize + 0.35), frameMat);
       frame.position.set(px, 0.05, pz);
+      
       const tileMat = new THREE.MeshStandardMaterial({ color: p.hex, emissive: p.hex, emissiveIntensity: 0.3, roughness: 0.4 });
       const tile = new THREE.Mesh(new THREE.BoxGeometry(padSize, 0.16, padSize), tileMat);
       tile.position.set(px, 0.08, pz);
       tile.receiveShadow = true;
+      
       const ballMat = new THREE.MeshStandardMaterial({ color: p.hex, emissive: p.hex, emissiveIntensity: 0.5, roughness: 0.3 });
       const ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 16), ballMat);
       ball.position.set(px, 1.6, pz);
       ball.castShadow = true;
-      this.root.add(frame, tile, ball);
-      this.pads.push({ x: px, z: pz, half: padSize / 2, frameMat, ball, k });
+
+      const lockSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: lockTex, depthTest: false }));
+      lockSprite.position.set(px, 2.6, pz);
+      lockSprite.scale.set(1.2, 1.2, 1);
+      lockSprite.visible = false;
+
+      this.root.add(frame, tile, ball, lockSprite);
+      this.pads.push({ x: px, z: pz, half: padSize / 2, frameMat, ball, k, lockSprite });
     });
     this._markActivePad();
 
@@ -252,12 +310,11 @@ export class PixelArena {
     ctx.fillStyle = '#343949';
     ctx.fillRect(x, y, cs, cs);
 
-    // Por defecto, el color de una casilla sin pintar (fondo de cuadrícula)
     let color = (i + j) % 2 ? '#575d6e' : '#525869'; 
 
     if (t !== NONE) {
-      if (t === 4) {
-        // SI ES EL ÍNDICE 4 (BLANCO INTOCABLE), LO PINTAMOS BLANCO
+      if (t === this.whiteIdx) {
+        // SI ES EL BLANCO INTOCABLE, LO PINTAMOS BLANCO
         color = '#ffffff'; 
       } else {
         // Si ya está pintado, usamos su color. Si no, el gris clarito de "por pintar"
@@ -279,7 +336,13 @@ export class PixelArena {
   }
 
   _markActivePad() {
-    this.pads.forEach((p) => p.frameMat.color.set(p.k === this.current ? 0xffd400 : 0xffffff));
+    this.pads.forEach((p) => {
+      if (this.locked[p.k]) {
+        p.frameMat.color.set(0x555555); // Gris si está bloqueado
+      } else {
+        p.frameMat.color.set(p.k === this.current ? 0xffd400 : 0xffffff); // Amarillo si es el actual
+      }
+    });
   }
 
   setCurrent(k) {
@@ -292,8 +355,15 @@ export class PixelArena {
     this.pads.forEach((p) => {
       p.ball.position.y = 1.6 + Math.sin(this.time * 2.2 + p.k) * 0.15;
       p.ball.rotation.y += dt;
+      if (p.lockSprite.visible) {
+        p.lockSprite.position.y = 2.6 + Math.sin(this.time * 3) * 0.1; 
+      }
     });
+    
     for (const p of this.pads) {
+      // Si el color está bloqueado, no hace nada si pasas por encima
+      if (this.locked[p.k]) continue; 
+
       if (p.k !== this.current && Math.abs(car.x - p.x) < p.half && Math.abs(car.z - p.z) < p.half) {
         this.setCurrent(p.k);
         onPick?.(p.k);
@@ -321,16 +391,31 @@ export class PixelArena {
         if (dx * dx + dz * dz > r * r) continue;
         const idx = j * cols + i;
         const t = this.target[idx];
-        if (t === NONE) continue;
         
-        // EL BLANCO (índice 4) NO SE PUEDE PINTAR
-        if (t === 4) continue; 
-
+        // EL BLANCO NO SE PUEDE PINTAR
+        if (t === NONE || t === this.whiteIdx) continue; 
+        
         if (PIXEL.rule === 'match' && t !== this.current) continue;
         const before = this.painted[idx];
         if (before === this.current) continue;
+        
         this.painted[idx] = this.current;
         this.correct += (this.current === t ? 1 : 0) - (before === t ? 1 : 0);
+        
+        // --- LÓGICA DE CONTAR PARA EL CANDADO ---
+        if (this.current === t) {
+          this.colorPainted[t]++;
+          if (this.colorPainted[t] >= this.colorTargets[t]) {
+            this.locked[t] = true;
+            const pad = this.pads.find(p => p.k === t);
+            if (pad) pad.lockSprite.visible = true;
+            this._markActivePad();
+          }
+        } else if (before === t) {
+          this.colorPainted[t]--;
+        }
+        // ---------------------------------------
+
         this._drawCell(i, j);
         this.dirty = true;
       }
@@ -346,7 +431,6 @@ export class PixelArena {
   }
 }
 
-// Función de respaldo por si no encuentra la imagen
 function sampleFallback(cols, rows) {
   const c = document.createElement('canvas');
   c.width = cols;
@@ -355,7 +439,6 @@ function sampleFallback(cols, rows) {
   x.scale(cols / 40, rows / 28);
   const rect = (color, a, b, w, h) => { x.fillStyle = color; x.fillRect(a, b, w, h); };
   const circle = (color, cx, cy, r) => { x.fillStyle = color; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); };
-  
   circle('#ffc400', 7, 7, 4);
   rect('#22b04a', 0, 23, 40, 5);
   rect('#1f5bff', 14, 12, 14, 11);

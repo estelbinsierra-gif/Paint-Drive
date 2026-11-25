@@ -1,3 +1,10 @@
+/* =====================================================================
+   PAINT DRIVE · menú principal
+   Estilo arcade / Splatoon: cielo, arena, salpicaduras rojo-azul, neones.
+   La lógica vive en MainMenu.js (no depende de este archivo salvo por las
+   clases .is-1p y .is-blocked, y por los ids/clases del HTML).
+   ===================================================================== */
+
 :root {
   --red: #e8222e;
   --red-bright: #ff4455;
@@ -5,9 +12,14 @@
   --blue: #1f5bff;
   --blue-bright: #4d8aff;
   --blue-dark: #0a2a8a;
+  --violet: #7a2cff;
+  --pink: #ff2d6a;
   --navy: #0b0b24;
+  --glass-top: rgba(34, 34, 86, 0.94);
+  --glass-bottom: rgba(8, 8, 28, 0.96);
   --font-display: "Impact", "Haettenschweiler", "Arial Black", system-ui, sans-serif;
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 *,
@@ -20,7 +32,7 @@ html,
 body {
   height: 100%;
   margin: 0;
-  background: #5db4ff;
+  background: #2f9bff;
   overflow: hidden;
 }
 
@@ -37,35 +49,40 @@ body {
   isolation: isolate;
 }
 
-/* ---------- Arena ---------- */
+/* =====================================================================
+   ESCENARIO
+   ===================================================================== */
 .arena-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   background:
-    radial-gradient(18% 9% at 14% 9%, rgba(255, 255, 255, 0.95) 0 55%, transparent 100%),
-    radial-gradient(22% 11% at 80% 7%, rgba(255, 255, 255, 0.9) 0 55%, transparent 100%),
-    radial-gradient(14% 7% at 48% 16%, rgba(255, 255, 255, 0.7) 0 55%, transparent 100%),
-    linear-gradient(180deg, #4aa7ff 0%, #a9dcff 28%, #d9dee7 29%, #b5bcc9 100%);
+    linear-gradient(180deg, #1f86ff 0%, #53b3ff 14%, #a9deff 27%, #dfe6f2 28.4%, #c5cddc 45%, #a3adc2 100%);
 }
 
+/* suelo de arena: baldosas + brillo central */
 .arena-bg::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 29%;
+  top: 28%;
   bottom: 0;
   background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 2px, transparent 2px 130px),
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.07) 0 2px, transparent 2px 95px);
+    radial-gradient(60% 55% at 50% 38%, rgba(255, 255, 255, 0.55), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(20, 30, 70, 0.08) 0 2px, transparent 2px 130px),
+    repeating-linear-gradient(0deg, rgba(20, 30, 70, 0.08) 0 2px, transparent 2px 95px);
 }
 
+/* viñeta */
 .arena-bg::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(130% 100% at 50% 50%, transparent 60%, rgba(0, 0, 40, 0.35) 100%);
+  background: radial-gradient(130% 100% at 50% 45%, transparent 55%, rgba(5, 5, 50, 0.45) 100%);
+  pointer-events: none;
+  z-index: 3;
 }
 
 .arena-bg svg {
@@ -90,13 +107,96 @@ body {
   stroke-linecap: round;
 }
 
-/* ---------- Rejilla del menú ---------- */
+/* rayos de luz que giran muy despacio detrás del coche */
+.rays {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.2) 0 6deg, transparent 6deg 18deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 0%, transparent 62%);
+  mask-image: radial-gradient(closest-side, #000 0%, transparent 62%);
+  animation: spin 90s linear infinite;
+  opacity: 0.55;
+  z-index: 0;
+}
+
+/* nubes */
+.cloud {
+  position: absolute;
+  left: 0;
+  width: 26vw;
+  height: 7vw;
+  max-height: 12vh;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, #fff 40%, rgba(255, 255, 255, 0) 100%);
+  opacity: 0.9;
+  filter: blur(1px);
+  animation: drift 70s linear infinite;
+  z-index: 0;
+}
+.cloud-1 {
+  top: 3%;
+  animation-duration: 90s;
+}
+.cloud-2 {
+  top: 11%;
+  width: 20vw;
+  animation-duration: 70s;
+  animation-delay: -35s;
+  opacity: 0.75;
+}
+.cloud-3 {
+  top: 17%;
+  width: 16vw;
+  animation-duration: 110s;
+  animation-delay: -70s;
+  opacity: 0.6;
+}
+
+/* gotas de pintura flotando */
+.drop {
+  position: absolute;
+  bottom: -6%;
+  width: clamp(10px, 1.6vw, 24px);
+  aspect-ratio: 1;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  opacity: 0;
+  animation: floatUp 11s ease-in infinite;
+  z-index: 2;
+}
+.d1 { left: 8%;  background: var(--red-bright);  animation-delay: 0s; }
+.d2 { left: 22%; background: var(--blue-bright); animation-delay: -3s; animation-duration: 13s; }
+.d3 { left: 38%; background: #ffd400;            animation-delay: -6s; }
+.d4 { left: 64%; background: #3ddc6a;            animation-delay: -2s; animation-duration: 12s; }
+.d5 { left: 79%; background: var(--red-bright);  animation-delay: -8s; }
+.d6 { left: 92%; background: var(--violet);      animation-delay: -5s; animation-duration: 14s; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes drift {
+  from { transform: translateX(-35vw); }
+  to   { transform: translateX(130vw); }
+}
+@keyframes floatUp {
+  0%   { transform: translateY(0) rotate(-45deg); opacity: 0; }
+  12%  { opacity: 0.85; }
+  100% { transform: translateY(-105vh) rotate(-45deg); opacity: 0; }
+}
+
+/* =====================================================================
+   REJILLA DEL MENÚ (2 jugadores por defecto)
+   ===================================================================== */
 .menu {
   position: absolute;
   inset: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 30vw) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 30vw) minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
     "p1 logo p2"
@@ -105,8 +205,9 @@ body {
   column-gap: clamp(8px, 2vw, 32px);
   padding:
     max(env(safe-area-inset-top), clamp(10px, 2.5vh, 28px))
-    clamp(10px, 2vw, 32px)
-    max(env(safe-area-inset-bottom), clamp(10px, 3vh, 32px));
+    max(env(safe-area-inset-right), clamp(10px, 2vw, 32px))
+    max(env(safe-area-inset-bottom), clamp(10px, 3vh, 32px))
+    max(env(safe-area-inset-left), clamp(10px, 2vw, 32px));
 }
 
 .player-1 {
@@ -121,7 +222,6 @@ body {
   --accent-bright: var(--blue-bright);
   --accent-dark: var(--blue-dark);
 }
-/* El logo vive dentro de .center-column, que es el hijo directo de la rejilla */
 .center-column {
   grid-area: logo;
 }
@@ -132,18 +232,58 @@ body {
   grid-area: mode;
 }
 
-/* El botón y el selector de modo siempre por encima de los paneles de jugador */
+/* el botón y el selector de modo siempre por encima de los paneles */
 .play-wrap,
 .mode-panel {
   position: relative;
   z-index: 10;
 }
 
-/* ---------- Título ---------- */
+/* entrada suave al abrir el menú */
+.center-column,
+.play-wrap,
+.mode-panel,
+.player-head,
+.player-foot,
+.car-view {
+  animation: rise 0.7s var(--ease) both;
+}
+.center-column { animation-delay: 0.05s; }
+.player-head { animation-delay: 0.15s; }
+.car-view { animation-delay: 0.25s; }
+.player-foot { animation-delay: 0.35s; }
+.play-wrap { animation-delay: 0.3s; }
+.mode-panel { animation-delay: 0.4s; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* =====================================================================
+   LOGO
+   ===================================================================== */
 .logo-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+/* mancha de pintura detrás del logo */
+.logo-wrap::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 150%;
+  height: 120%;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(40% 50% at 28% 50%, rgba(255, 68, 85, 0.5), transparent 70%),
+    radial-gradient(40% 50% at 72% 50%, rgba(77, 138, 255, 0.5), transparent 70%);
+  filter: blur(14px);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .logo {
@@ -154,13 +294,14 @@ body {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(2rem, min(5.2vw, 11vh), 5.5rem);
-  line-height: 0.88;
+  font-size: clamp(2rem, min(5.4vw, 11vh), 5.8rem);
+  line-height: 0.9;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   transform: skew(-7deg) rotate(-2deg);
   user-select: none;
-  filter: drop-shadow(0 0.07em 0.1em rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 0.08em 0.12em rgba(0, 0, 20, 0.55));
+  animation: logoFloat 5s ease-in-out infinite;
 }
 .logo span {
   paint-order: stroke fill;
@@ -168,107 +309,157 @@ body {
 }
 .logo-paint {
   color: var(--red-bright);
-  text-shadow: 0.04em 0.05em 0 var(--red-dark);
+  text-shadow:
+    0.03em 0.04em 0 var(--red-dark),
+    0.06em 0.08em 0 var(--red-dark),
+    0 0 0.55em rgba(255, 68, 85, 0.55);
 }
 .logo-drive {
   color: var(--blue-bright);
-  text-shadow: 0.04em 0.05em 0 var(--blue-dark);
+  text-shadow:
+    0.03em 0.04em 0 var(--blue-dark),
+    0.06em 0.08em 0 var(--blue-dark),
+    0 0 0.55em rgba(77, 138, 255, 0.6);
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: skew(-7deg) rotate(-2deg) translateY(0); }
+  50%      { transform: skew(-7deg) rotate(-2deg) translateY(-0.06em); }
 }
 
 .tagline {
-  margin: 0.5em 0 0;
+  position: relative;
+  margin: 0.7em 0 0;
+  padding: 0.28em 1.2em 0.34em;
   font-family: var(--font-display);
-  font-size: clamp(0.65rem, min(1.2vw, 2.2vh), 1.1rem);
-  letter-spacing: 0.14em;
-  color: var(--navy);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
-  transform: skew(-7deg);
+  font-size: clamp(0.62rem, min(1.15vw, 2.1vh), 1.05rem);
+  letter-spacing: 0.16em;
+  color: #fff;
   text-align: center;
+  background: linear-gradient(90deg, var(--red) 0%, var(--violet) 50%, var(--blue) 100%);
+  border: 2px solid var(--navy);
+  border-radius: 6px;
+  box-shadow: 0 4px 0 var(--navy), 0 0 1.1em rgba(122, 44, 255, 0.55);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  transform: skew(-7deg);
 }
 
-/* ---------- Botón jugar ---------- */
+/* =====================================================================
+   BOTÓN JUGAR
+   ===================================================================== */
 .play-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5em;
+  gap: 0.55em;
   min-height: 0;
 }
 
 .btn-play {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: clamp(88px, min(15vw, 24vh), 180px);
   aspect-ratio: 1;
   padding: 0;
-  border: clamp(4px, 0.45vw, 8px) solid transparent;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease), filter 0.2s ease;
+  animation: pulse 1.9s ease-in-out infinite;
+}
+/* aro de neón que gira */
+.btn-play::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--pink), var(--violet), #1e6bff, #19d3ff, var(--pink));
+  animation: spin 4s linear infinite;
+  z-index: -2;
+}
+/* relleno oscuro con brillo */
+.btn-play::after {
+  content: "";
+  position: absolute;
+  inset: clamp(5px, 0.5vw, 9px);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 30%, #2b2b70, #0b0b26 70%) padding-box,
-    conic-gradient(from 30deg, #ff2d6a, #7a2cff, #1e6bff, #ff2d6a) border-box;
-  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.45), 0 0 1.4em rgba(122, 44, 255, 0.6);
-  cursor: pointer;
-  transition: transform 0.12s ease, filter 0.12s ease;
-  animation: pulse 1.8s ease-in-out infinite;
+    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.22), transparent 42%),
+    radial-gradient(circle at 50% 35%, #34349a, #0b0b2c 72%);
+  box-shadow: inset 0 -0.5em 1em rgba(0, 0, 0, 0.5);
+  z-index: -1;
 }
 .btn-play:hover {
-  transform: scale(1.07);
-  filter: brightness(1.15);
+  transform: scale(1.08);
+  filter: brightness(1.15) saturate(1.1);
 }
 .btn-play:active {
   animation: none;
-  transform: scale(0.95);
+  transform: scale(0.94);
 }
 .btn-play:focus-visible {
   outline: 4px solid #fff;
-  outline-offset: 5px;
+  outline-offset: 6px;
 }
 /* main.js lo bloquea cuando los dos jugadores tienen el mismo color */
 .btn-play:disabled,
 .btn-play.is-blocked {
   animation: none;
   cursor: not-allowed;
-  filter: grayscale(1) brightness(0.8);
+  filter: grayscale(1) brightness(0.75);
   transform: none;
+}
+.btn-play:disabled::before,
+.btn-play.is-blocked::before {
+  animation: none;
 }
 
 .play-icon {
   width: 36%;
   aspect-ratio: 1;
-  margin-left: 6%;
-  background: #fff;
+  margin-left: 7%;
+  background: linear-gradient(180deg, #fff, #cfd6ff);
   clip-path: polygon(10% 0, 100% 50%, 10% 100%);
+  filter: drop-shadow(0 0 0.25em rgba(255, 255, 255, 0.7));
+  transition: transform 0.2s var(--ease);
+}
+.btn-play:hover .play-icon {
+  transform: scale(1.12);
 }
 
 .play-label {
   font-family: var(--font-display);
-  font-size: clamp(1rem, min(2vw, 3vh), 1.7rem);
-  letter-spacing: 0.15em;
+  font-size: clamp(1rem, min(2vw, 3vh), 1.75rem);
+  letter-spacing: 0.16em;
   color: #fff;
   -webkit-text-stroke: 0.12em var(--navy);
   paint-order: stroke fill;
-  text-shadow: 0 0.08em 0 var(--navy);
+  text-shadow: 0 0.08em 0 var(--navy), 0 0 0.6em rgba(122, 44, 255, 0.7);
 }
 
 @keyframes pulse {
-  0%,
-  100% {
-    box-shadow: 0 8px 14px rgba(0, 0, 0, 0.45), 0 0 1em rgba(122, 44, 255, 0.5);
-  }
-  50% {
-    box-shadow: 0 8px 14px rgba(0, 0, 0, 0.45), 0 0 2.4em rgba(255, 45, 106, 0.85);
-  }
+  0%, 100% { box-shadow: 0 10px 18px rgba(0, 0, 30, 0.45), 0 0 1em rgba(122, 44, 255, 0.45); }
+  50%      { box-shadow: 0 10px 18px rgba(0, 0, 30, 0.45), 0 0 2.6em rgba(255, 45, 106, 0.85); }
 }
 
-/* ---------- Paneles oscuros (banner, colores, modo) ---------- */
+/* =====================================================================
+   PANELES OSCUROS (banner, colores, modo)
+   ===================================================================== */
 .banner,
 .colors,
 .mode-panel {
-  background: linear-gradient(180deg, rgba(30, 30, 72, 0.96), rgba(8, 8, 26, 0.96));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 38%),
+    linear-gradient(180deg, var(--glass-top), var(--glass-bottom));
 }
 
-/* ---------- Jugadores ---------- */
+/* =====================================================================
+   JUGADORES
+   ===================================================================== */
 .player {
   display: flex;
   flex-direction: column;
@@ -280,18 +471,41 @@ body {
 
 .player-head,
 .player-foot {
-  width: min(100%, 400px);
-  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45));
+  width: min(100%, 410px);
+  filter: drop-shadow(0 7px 8px rgba(0, 0, 30, 0.5));
 }
 
 .banner {
+  position: relative;
   padding: 0.5em 1em 0.6em;
   clip-path: polygon(3% 0, 100% 0, 97% 100%, 0 100%);
-  box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 1.4em var(--accent-dark);
-  font-size: clamp(0.8rem, min(1.5vw, 2.3vh), 1.15rem);
+  box-shadow:
+    inset 0 0 0 3px var(--accent),
+    inset 0 0 1.6em var(--accent-dark),
+    inset 0 -0.4em 0 rgba(0, 0, 0, 0.25);
+  font-size: clamp(0.8rem, min(1.5vw, 2.3vh), 1.2rem);
+  overflow: hidden;
+}
+/* destello que cruza el banner */
+.banner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 28%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes sheen {
+  0%, 62% { left: -40%; }
+  100%    { left: 130%; }
 }
 
 .banner-title {
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -300,11 +514,13 @@ body {
   font-family: var(--font-display);
   font-size: 1.7em;
   letter-spacing: 0.06em;
+  text-shadow: 0 0.06em 0 var(--accent-dark), 0 0 0.7em var(--accent);
 }
 .icon {
   width: 1.1em;
   height: 1.1em;
   fill: #fff;
+  filter: drop-shadow(0 0 0.3em var(--accent));
 }
 
 .selector {
@@ -321,17 +537,19 @@ body {
   text-align: center;
 }
 .vehicle-name {
+  white-space: nowrap;
   font-family: var(--font-display);
   font-size: 1.5em;
   font-weight: 400;
   letter-spacing: 0.05em;
+  text-shadow: 0 0 0.6em rgba(255, 255, 255, 0.35);
 }
 .selector-label small,
 .colors small {
   font-size: 0.75em;
   font-weight: 700;
   letter-spacing: 0.12em;
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .arrow {
@@ -341,21 +559,22 @@ body {
   width: 2em;
   height: 2em;
   padding: 0;
-  border: 2px solid rgba(255, 255, 255, 0.65);
+  border: 2px solid rgba(255, 255, 255, 0.7);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   font: 700 1.5em/1 var(--font-body);
   cursor: pointer;
-  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  transition: transform 0.18s var(--ease), background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .arrow:hover {
   background: var(--accent);
   border-color: #fff;
-  transform: scale(1.12);
+  transform: scale(1.15);
+  box-shadow: 0 0 0.9em var(--accent);
 }
 .arrow:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
 }
 .arrow:focus-visible {
   outline: 3px solid #fff;
@@ -367,7 +586,20 @@ body {
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
-  max-height: 42vh;
+  max-height: 46vh;
+}
+/* halo de color del jugador detrás del coche */
+.car-view::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 4%;
+  height: 62%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent, #7a2cff) 60%, transparent), transparent 72%);
+  filter: blur(10px);
+  opacity: 0.85;
+  pointer-events: none;
 }
 .car-view canvas {
   position: absolute;
@@ -386,8 +618,11 @@ body {
   gap: 0.2em;
   padding: 0.55em 1em 0.6em;
   clip-path: polygon(3% 0, 97% 0, 100% 100%, 0 100%);
-  box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 1.4em var(--accent-dark);
-  font-size: clamp(0.75rem, min(1.4vw, 2.1vh), 1.05rem);
+  box-shadow:
+    inset 0 0 0 3px var(--accent),
+    inset 0 0 1.6em var(--accent-dark),
+    inset 0 -0.4em 0 rgba(0, 0, 0, 0.25);
+  font-size: clamp(0.75rem, min(1.4vw, 2.1vh), 1.1rem);
 }
 .colors-row {
   display: flex;
@@ -417,32 +652,39 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--sw);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
+    var(--sw);
   border: 3px solid rgba(255, 255, 255, 0.55);
   box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.3);
-  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 0.18s var(--ease), border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .swatch:hover span {
-  transform: scale(1.12);
+  transform: scale(1.14);
 }
 .swatch input:checked + span {
   border-color: #fff;
-  transform: scale(1.22);
-  box-shadow: 0 0 0 2px var(--sw), 0 0 0.9em var(--sw);
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px var(--sw), 0 0 1em var(--sw), inset 0 -3px 5px rgba(0, 0, 0, 0.3);
 }
 .swatch input:focus-visible + span {
   outline: 3px solid #fff;
   outline-offset: 3px;
 }
 
-/* ---------- Modo de juego ---------- */
+/* =====================================================================
+   MODO DE JUEGO
+   ===================================================================== */
 .mode-panel {
   justify-self: center;
-  width: min(100%, 420px);
+  width: min(100%, 430px);
   padding: 0.6em 1em 0.8em;
   clip-path: polygon(4% 0, 96% 0, 100% 100%, 0 100%);
-  box-shadow: inset 0 0 0 3px #7a2cff, inset 0 0 1.4em rgba(122, 44, 255, 0.5);
-  font-size: clamp(0.8rem, min(1.5vw, 2.3vh), 1.15rem);
+  box-shadow:
+    inset 0 0 0 3px var(--violet),
+    inset 0 0 1.6em rgba(122, 44, 255, 0.55),
+    inset 0 -0.4em 0 rgba(0, 0, 0, 0.25);
+  font-size: clamp(0.8rem, min(1.5vw, 2.3vh), 1.2rem);
 }
 .mode-title {
   margin: 0 0 0.5em;
@@ -450,6 +692,7 @@ body {
   font-family: var(--font-display);
   font-size: 1.3em;
   letter-spacing: 0.1em;
+  text-shadow: 0 0 0.7em rgba(122, 44, 255, 0.9);
 }
 .mode-select {
   display: grid;
@@ -463,9 +706,11 @@ body {
 }
 .mode-1 {
   --c: var(--red);
+  --c-dark: var(--red-dark);
 }
 .mode-2 {
   --c: var(--blue);
+  --c-dark: var(--blue-dark);
 }
 .mode input {
   position: absolute;
@@ -475,48 +720,57 @@ body {
   cursor: pointer;
 }
 .mode span {
+  white-space: nowrap;
   display: block;
   padding: 0.65em 0.4em;
   text-align: center;
   font-family: var(--font-display);
   font-size: 1.1em;
   letter-spacing: 0.05em;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.07);
   border: 3px solid var(--c);
-  border-radius: 10px;
-  transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 12px;
+  transition: transform 0.18s var(--ease), background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 .mode:hover span {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  background: rgba(255, 255, 255, 0.14);
 }
 .mode input:checked + span {
-  background: var(--c);
+  color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 78%, #fff), var(--c) 55%, var(--c-dark));
   border-color: #fff;
-  box-shadow: 0 0 1.2em var(--c);
+  box-shadow: 0 0 1.3em var(--c), 0 4px 0 var(--c-dark);
+  transform: translateY(-2px);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
 }
 .mode input:focus-visible + span {
   outline: 4px solid #fff;
   outline-offset: 3px;
 }
 
-/* ---------- Mensaje temporal ---------- */
+/* =====================================================================
+   MENSAJE TEMPORAL
+   ===================================================================== */
 .toast {
   position: absolute;
   left: 50%;
-  bottom: max(env(safe-area-inset-bottom), 16px);
-  z-index: 5;
+  bottom: max(calc(env(safe-area-inset-bottom) + 12px), clamp(110px, 19vh, 190px)); /* justo encima del selector de modo */
+  z-index: 20;
   max-width: 90vw;
-  padding: 0.7em 1.2em;
-  border-radius: 12px;
+  padding: 0.7em 1.3em;
+  border-radius: 999px;
   font-size: 0.95rem;
+  font-weight: 700;
   text-align: center;
   color: #fff;
-  background: rgba(8, 8, 24, 0.92);
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: linear-gradient(180deg, rgba(40, 40, 100, 0.96), rgba(8, 8, 28, 0.96));
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 8px 24px rgba(0, 0, 30, 0.5), 0 0 1em rgba(122, 44, 255, 0.5);
   transform: translate(-50%, 160%);
   opacity: 0;
-  transition: transform 0.25s ease, opacity 0.25s ease;
+  transition: transform 0.3s var(--ease), opacity 0.25s ease;
   pointer-events: none;
 }
 .toast.is-visible {
@@ -524,7 +778,63 @@ body {
   opacity: 1;
 }
 
-/* ---------- Pantallas estrechas / verticales ---------- */
+/* =====================================================================
+   MODO 1 JUGADOR  (.menu.is-1p, lo pone y quita MainMenu.js)
+   Jugador 2 fuera, coche enorme en el centro, sin selector de color.
+   ===================================================================== */
+
+/* el jugador 2 desaparece del todo: no ocupa sitio ni recibe clics */
+.menu.is-1p .player-2,
+.menu.is-1p .p1-colors {
+  display: none;
+}
+
+/* el <section> del jugador 1 deja de ser una caja: su banner y su visor
+   pasan a ser celdas de la rejilla del menú, sin tocar el HTML */
+.menu.is-1p .player-1 {
+  display: contents;
+}
+
+.menu.is-1p {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 48vw) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    ". logo ."
+    "p1 car play"
+    ". mode .";
+}
+
+.menu.is-1p .player-head {
+  grid-area: p1;
+  align-self: center;
+  justify-self: start;
+  width: min(100%, 380px);
+}
+
+.menu.is-1p .car-view {
+  grid-area: car;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  pointer-events: none;
+}
+.menu.is-1p .car-view::before {
+  left: 4%;
+  right: 4%;
+  height: 54%;
+  bottom: 8%;
+}
+
+.menu.is-1p .play-wrap {
+  align-self: center;
+  justify-self: center;
+}
+
+/* =====================================================================
+   PANTALLAS ESTRECHAS / VERTICALES
+   ===================================================================== */
 @media (max-aspect-ratio: 1/1), (max-width: 720px) {
   .menu {
     grid-template-columns: 1fr 1fr;
@@ -537,6 +847,7 @@ body {
     align-content: start;
     row-gap: clamp(8px, 2vh, 20px);
     overflow-y: auto;
+    overflow-x: hidden;
   }
   .logo {
     font-size: clamp(2rem, min(12vw, 9vh), 4.5rem);
@@ -558,70 +869,11 @@ body {
   .btn-play {
     width: clamp(80px, 22vw, 130px);
   }
-}
 
-/* Móvil en horizontal */
-@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
-  .tagline {
-    display: none;
-  }
-  .car-view {
-    max-height: 32vh;
-  }
-}
-
-/* =====================================================================
-   MODO 1 JUGADOR  (.menu.is-1p, lo pone y quita MainMenu.js)
-   Jugador 2 fuera, coche grande en el centro, sin selector de color.
-   ===================================================================== */
-
-/* El jugador 2 desaparece del todo: no ocupa sitio ni recibe clics */
-.menu.is-1p .player-2,
-.menu.is-1p .p1-colors {
-  display: none;
-}
-
-/* El <section> del jugador 1 deja de ser una caja: su banner y su visor
-   pasan a ser celdas de la rejilla del menú, sin tocar el HTML */
-.menu.is-1p .player-1 {
-  display: contents;
-}
-
-.menu.is-1p {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 46vw) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    ". logo ."
-    "p1 car play"
-    ". mode .";
-}
-
-.menu.is-1p .player-head {
-  grid-area: p1;
-  align-self: start;
-  justify-self: start;
-}
-
-.menu.is-1p .car-view {
-  grid-area: car;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  max-height: none;
-  aspect-ratio: auto;
-  pointer-events: none;
-}
-
-.menu.is-1p .play-wrap {
-  align-self: start;
-  justify-self: center;
-}
-
-/* 1 jugador en pantallas estrechas o verticales: todo en una columna */
-@media (max-aspect-ratio: 1/1), (max-width: 720px) {
+  /* 1 jugador: todo en una columna */
   .menu.is-1p {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-rows: auto auto minmax(180px, 1fr) auto auto;
     grid-template-areas:
       "logo"
       "p1"
@@ -631,23 +883,90 @@ body {
   }
   .menu.is-1p .player-head {
     justify-self: center;
+    width: min(100%, 380px);
+    font-size: clamp(0.8rem, 3.6vw, 1.1rem);
   }
   .menu.is-1p .car-view {
-    height: auto;
-    aspect-ratio: 4 / 3;
-    width: min(100%, 460px);
+    height: 100%;
+    min-height: 200px;
+    width: min(100%, 520px);
     justify-self: center;
   }
   .menu.is-1p .play-wrap {
-    align-self: center;
+    flex-direction: row;
+    gap: 1em;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .btn-play {
-    animation: none;
+/* móvil muy estrecho: los paneles de 2 jugadores se compactan */
+@media (max-width: 420px) {
+  .banner {
+    padding: 0.4em 0.5em 0.5em;
   }
-  * {
+  .vehicle-name {
+    font-size: 1.2em;
+  }
+  .arrow {
+    width: 1.7em;
+    height: 1.7em;
+  }
+  .swatches {
+    gap: 0.3em;
+  }
+  .colors {
+    padding: 0.5em 0.4em;
+  }
+  .colors-row {
+    gap: 0.25em;
+  }
+  .swatch {
+    width: 1.35em;
+  }
+}
+
+/* móvil en horizontal */
+@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
+  .tagline {
+    display: none;
+  }
+  .car-view {
+    max-height: 34vh;
+  }
+  .banner-title {
+    margin-bottom: 0.1em;
+  }
+  .rays,
+  .drop {
+    display: none;
+  }
+  .banner,
+  .colors {
+    font-size: clamp(0.55rem, 2.3vh, 0.85rem);
+  }
+  .mode span {
+    padding: 0.5em 0.3em;
+    font-size: 0.95em;
+    white-space: nowrap;
+  }
+  .menu.is-1p {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.5fr) minmax(0, 0.9fr);
+  }
+  .menu.is-1p .player-head {
+    font-size: clamp(0.55rem, 2.3vh, 0.85rem);
+  }
+}
+
+/* =====================================================================
+   MOVIMIENTO REDUCIDO
+   ===================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
     transition-duration: 0.01ms !important;
+  }
+  .drop {
+    display: none;
   }
 }

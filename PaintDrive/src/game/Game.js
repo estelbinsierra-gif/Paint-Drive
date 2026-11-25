@@ -450,7 +450,7 @@ export class Game {
 
   /** Deja la huella de pintura del coche (rellenando el hueco entre dos frames). */
   paintCar(car) {
-    const r = car.brushRadius;
+    const r = car.brushRadius; // <--- USAMOS EL DEL COCHE (para que el potenciador lo agrande)
     const dx = car.x - car.lastPaint.x;
     const dz = car.z - car.lastPaint.z;
     const dist = Math.hypot(dx, dz);
